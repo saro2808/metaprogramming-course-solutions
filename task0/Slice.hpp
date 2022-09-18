@@ -1,65 +1,53 @@
 #include <span>
-#include <concepts>
-#include <cstdlib>
-#include <array>
-#include <iterator>
 
 
-inline constexpr std::ptrdiff_t dynamic_stride = -1;
-
-
-template
-  < class T
-  , std::size_t extent = std::dynamic_extent
-  , std::ptrdiff_t stride = 1
-  >
+template <class T, std::size_t extent, std::size_t stride>
 class Slice {
 public:
-  template<class U>
-  Slice(U& container);
+  template <class It>
+  Slice(It first, std::size_t count, std::size_t stride);
 
-  template <std::contiguous_iterator It>
-  Slice(It first, std::size_t count, std::ptrdiff_t skip);
-
-  // Data, Size, Stride, begin, end, casts, etc...
+  // ...
 
   Slice<T, std::dynamic_extent, stride>
-    First(std::size_t count) const;
+    First(std::size_t count);
 
   template <std::size_t count>
   Slice<T, /*?*/, stride>
-    First() const;
+    First();
 
   Slice<T, std::dynamic_extent, stride>
-    Last(std::size_t count) const;
+    Last(std::size_t count);
 
   template <std::size_t count>
   Slice<T, /*?*/, stride>
-    Last() const;
+    Last();
 
   Slice<T, std::dynamic_extent, stride>
-    DropFirst(std::size_t count) const;
+    DropFirst(std::size_t count);
 
   template <std::size_t count>
   Slice<T, /*?*/, stride>
-    DropFirst() const;
-
+    DropFirst();
+    
   Slice<T, std::dynamic_extent, stride>
-    DropLast(std::size_t count) const;
+    DropLast(std::size_t count);
 
   template <std::size_t count>
   Slice<T, /*?*/, stride>
-    DropLast() const;
+    DropLast();
 
   Slice<T, /*?*/, /*?*/>
-    Skip(std::ptrdiff_t skip) const;
-
-  template <std::ptrdiff_t skip>
+    Stride(std::size_t new_stride);
+  
+  template <std::size_t new_stride>
   Slice<T, /*?*/, /*?*/>
-    Skip() const;
+    Stride();
+
+  // ...
 
 private:
   T* data_;
   // std::size_t extent_; ?
-  // std::ptrdiff_t stride_; ?
+  // std::size_t stride_; ?
 };
