@@ -106,10 +106,13 @@ public:
   }
 
   template<class U>
-  constexpr Slice(U& container) requires (extent == std::dynamic_extent
-    && std::is_same_v<typename U::value_type, T>
-    //&& !std::is_same_v<U, std::array<typename U::value_type, container.size()>>
-    && requires() {container.size(); container.data();}) {
+  constexpr Slice(U& container)
+    requires(
+      (std::is_same_v<typename U::value_type, T> ||
+      std::is_same_v<typename U::value_type, std::remove_const_t<T>>) &&
+      extent == std::dynamic_extent &&
+      requires() { container.size(); container.data(); }
+    ) {
     if constexpr (stride == dynamic_stride) {
       stride_() = 1;
     }
@@ -136,13 +139,10 @@ public:
   Slice(It first, std::size_t count, std::ptrdiff_t skip) {
     if constexpr (stride == dynamic_stride) {
       stride_() = skip;
-    } else {
-      // assert(stride_() == skip);
-    }
+    } // else assert(stride_() == skip);
     if constexpr (extent == std::dynamic_extent) {
       extent_() = count;
     }
-    //extent_() = count;
     data_ = &*first;
   }
 
@@ -192,10 +192,10 @@ public:
     iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n); }
     inline bool operator==(const iterator& rhs) const { return ptr_ == rhs.ptr_; }
     inline bool operator!=(const iterator& rhs) const { return ptr_ != rhs.ptr_; }
-    inline bool operator>(const iterator& rhs) const {return ptr_ > rhs.ptr_;}
-    inline bool operator<(const iterator& rhs) const {return ptr_ < rhs.ptr_;}
-    inline bool operator>=(const iterator& rhs) const {return ptr_ >= rhs.ptr_;}
-    inline bool operator<=(const iterator& rhs) const {return ptr_ <= rhs.ptr_;}
+    inline bool operator>(const iterator& rhs) const { return ptr_ > rhs.ptr_; }
+    inline bool operator<(const iterator& rhs) const { return ptr_ < rhs.ptr_; }
+    inline bool operator>=(const iterator& rhs) const { return ptr_ >= rhs.ptr_; }
+    inline bool operator<=(const iterator& rhs) const { return ptr_ <= rhs.ptr_; }
   private:
     pointer ptr_;
   };
@@ -332,8 +332,7 @@ public:
   }
 
   operator Slice<const T, extent, dynamic_stride>() const
-    requires (std::is_same_v<T, std::remove_reference_t<T>>
-    && extent != std::dynamic_extent) {
+    requires (std::is_same_v<T, std::remove_reference_t<T>> && extent != std::dynamic_extent) {
     return Slice<const T, extent, dynamic_stride>(
       const_cast<const T*>(this->data_),
       this->extent_(),
@@ -353,3 +352,8 @@ private:
   [[no_unique_address]] ExtentStorage<extent> extent_;
   [[no_unique_address]] StrideStorage<stride> stride_;
 };
+
+// deduction guide
+// special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
+template<class U>
+Slice(U& container) -> Slice<typename U::value_type>;
