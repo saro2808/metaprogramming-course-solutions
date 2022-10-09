@@ -360,3 +360,6 @@ Slice(U& container) -> Slice<typename U::value_type>;
 
 template<typename Element, size_t size>
 Slice(std::array<Element, size>& array) -> Slice<Element, size>;
+
+template <std::contiguous_iterator It>
+Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
