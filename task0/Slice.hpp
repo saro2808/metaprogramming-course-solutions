@@ -290,21 +290,25 @@ public:
   /// casts ///
   /////////////
 
+  operator Slice<T, std::dynamic_extent, dynamic_stride>() const
+    requires (stride != dynamic_stride && extent != std::dynamic_extent) {
+    return Slice<T, std::dynamic_extent, dynamic_stride>(
+      this->data_, this->extent_(), this->stride_()
+    );
+  }
+
   operator Slice<T, std::dynamic_extent, stride>() const
     requires (extent != std::dynamic_extent) {
-    Slice<T, std::dynamic_extent, stride> res = *this;
-    return res;
+    return Slice<T, std::dynamic_extent, stride>(
+      this->data_, this->extent_(), this->stride_()
+    );
   }
 
   operator Slice<T, extent, dynamic_stride>() const
     requires (stride != dynamic_stride) {
-    Slice<T, extent, dynamic_stride> res = *this;
-    return res;
-  }
-
-  operator Slice<T, std::dynamic_extent, dynamic_stride>() const {
-    Slice<T, std::dynamic_extent, dynamic_stride> res = *this;
-    return res;
+    return Slice<T, extent, dynamic_stride>(
+      this->data_, this->extent_(), this->stride_()
+    );
   }
 
   operator Slice<const T, extent, stride>() const
