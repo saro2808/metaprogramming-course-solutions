@@ -101,6 +101,20 @@ public:
     data_ = const_cast<const T*>(dt);
   }
 
+  template<typename Element, size_t size>
+    requires (//extent != std::dynamic_extent && extent == size &&
+    std::is_same_v<T, Element>)
+  constexpr Slice//<Element, size>
+  (std::array<Element, size>& array) {
+    if constexpr (stride == dynamic_stride) {
+      stride_() = 1;
+    }
+    if constexpr (extent == std::dynamic_extent) {
+      extent_() = array.size() / stride_();
+    }
+    data_ = array.data();
+  }
+
   template<class U>
   constexpr Slice(U& container)
     requires(
@@ -114,20 +128,6 @@ public:
     }
     extent_() = container.size() / stride_();
     data_ = container.data();
-  }
-
-  template<typename Element, size_t size>
-    requires (extent != std::dynamic_extent && extent == size
-    && std::is_same_v<T, Element>)
-  constexpr Slice//<Element, size>
-  (std::array<Element, size>& array) {
-    if constexpr (stride == dynamic_stride) {
-      stride_() = 1;
-    }
-    if constexpr (extent == std::dynamic_extent) {
-      extent_() = array.size() / stride_();
-    }
-    data_ = array.data();
   }
 
   template <std::contiguous_iterator It>
@@ -355,4 +355,4 @@ template<class U>
 Slice(U& container) -> Slice<typename U::value_type>;
 
 template<typename Element, size_t size>
-Slice(std::array<Element, size>& array) -> Slice<Element, size>
+Slice(std::array<Element, size>& array) -> Slice<Element, size>;
