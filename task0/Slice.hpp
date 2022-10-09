@@ -84,8 +84,10 @@ public:
   Slice(const Slice&) = default;
   Slice(Slice&&) = default;
 
-  Slice<const T, extent, stride>(T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd)
-    requires std::is_same_v<T, std::remove_const_t<T>> {
+  Slice//<const T, extent, stride>
+  (T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd)
+    requires (!std::is_same_v<T, std::remove_const_t<T>>) {
+    //requires std::is_same_v<T, std::remove_const_t<T>> {
     data_ = const_cast<const T*>(dt);
     if (extent != std::dynamic_extent) {
       extent_() = extnt();
@@ -95,15 +97,18 @@ public:
     }
   }
 
-  Slice<const T, std::dynamic_extent, dynamic_stride>(T* dt)
-    requires std::is_same_v<T, std::remove_const_t<T>> {
+  Slice//<const T, std::dynamic_extent, dynamic_stride>
+  (T* dt)
+    //requires (std::is_same_v<T, std::remove_const_t<T>>
+    requires (!std::is_same_v<T, std::remove_const_t<T>>
+    && extent == std::dynamic_extent && stride == dynamic_stride) {
     data_ = const_cast<const T*>(dt);
   }
 
   template<class U>
   constexpr Slice(U& container) requires (extent == std::dynamic_extent
     //&& !std::is_same_v<U, std::array<typename U::value_type, container.size()>>
-    ) {
+    && requires() {container.size(); container.data();}) {
     if constexpr (stride == dynamic_stride) {
       stride_() = 1;
     }
@@ -112,8 +117,10 @@ public:
   }
 
   template<typename Element, size_t size>
-    requires (extent != std::dynamic_extent && extent == size)
-  constexpr Slice<Element, size>(std::array<Element, size>& array) {
+    requires (extent != std::dynamic_extent && extent == size
+    && std::is_same_v<T, Element>)
+  constexpr Slice//<Element, size>
+  (std::array<Element, size>& array) {
     if constexpr (stride == dynamic_stride) {
       stride_() = 1;
     }
@@ -145,10 +152,7 @@ public:
   ///////////////
 
   constexpr pointer Data() const noexcept { return data_; }
-  constexpr size_type Size() const noexcept {
-    if constexpr (extent == std::dynamic_extent) return extent_();
-    return extent;
-  }
+  constexpr size_type Size() const noexcept { return extent_(); }
   constexpr difference_type Stride() const noexcept { return stride_(); }
 
   ////////////////
@@ -206,51 +210,51 @@ public:
 
   Slice<T, std::dynamic_extent, stride>
     First(std::size_t count) const {
-      return Slice<T>(data_, count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_, count, stride_());
     }
 
   template <std::size_t count>
   Slice<T, count, stride>
     First() const {
-      return Slice<T>(data_, count, stride_());
+      return Slice<T, count, stride>(data_, count, stride_());
     }
 
   Slice<T, std::dynamic_extent, stride>
     Last(std::size_t count) const {
-      return Slice<T>(data_ + (extent_() - count) * stride_(), count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_ + (extent_() - count) * stride_(), count, stride_());
     }
 
   template <std::size_t count>
   Slice<T, count, stride>
     Last() const {
-      return Slice<T>(data_ + (extent_() - count) * stride_(), count, stride_());
+      return Slice<T, count, stride>(data_ + (extent_() - count) * stride_(), count, stride_());
     }
 
   template<std::size_t count>
   Slice<T, std::dynamic_extent, stride>
     DropFirst() const {
-      return Slice<T>(data_ + count * stride_(), extent_() - count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_ + count * stride_(), extent_() - count, stride_());
     }
 
   Slice<T, std::dynamic_extent, stride>
     DropFirst(std::size_t count) const {
-      return Slice<T>(data_ + count * stride_(), extent_() - count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_ + count * stride_(), extent_() - count, stride_());
     }
 
   Slice<T, std::dynamic_extent, stride>
     DropLast(std::size_t count) const {
-      return Slice<T>(data_, extent_() - count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_, extent_() - count, stride_());
     }
 
   template <std::size_t count>
   Slice<T, std::dynamic_extent, stride>
     DropLast() const {
-      return Slice<T>(data_, extent_() - count, stride_());
+      return Slice<T, std::dynamic_extent, stride>(data_, extent_() - count, stride_());
     }
 
   Slice<T, std::dynamic_extent, dynamic_stride>
     Skip(std::ptrdiff_t skip) const {
-      return Slice<T>(data_, (skip - 1 + extent_()) / skip, skip * stride_());
+      return Slice<T, std::dynamic_extent, dynamic_stride>(data_, (skip - 1 + extent_()) / skip, skip * stride_());
     }
 
   template <std::ptrdiff_t skip>
@@ -283,13 +287,13 @@ public:
   /////////////
 
   operator Slice<T, std::dynamic_extent, stride>() const
-    requires (stride != dynamic_stride) {
+    requires (extent != std::dynamic_extent) {
     Slice<T, std::dynamic_extent, stride> res = Slice(*this);
     return res;
   }
 
   operator Slice<T, extent, dynamic_stride>() const
-    requires (extent != std::dynamic_extent) {
+    requires (stride != dynamic_stride) {
     Slice<T, extent, dynamic_stride> res = Slice(*this);
     return res;
   }
