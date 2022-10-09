@@ -103,6 +103,7 @@ public:
 
   template<class U>
   constexpr Slice(U& container) requires (extent == std::dynamic_extent
+    && std::is_same_v<typename U::value_type, T>
     //&& !std::is_same_v<U, std::array<typename U::value_type, container.size()>>
     && requires() {container.size(); container.data();}) {
     if constexpr (stride == dynamic_stride) {
@@ -271,9 +272,16 @@ public:
   constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i); }
   
   bool operator==(const Slice<T, extent, stride>& that) const {
-      auto a = begin(); auto b = that.begin();
-      while (*a == *b && a != end() && b != that.end()) { ++a; ++b; }
-      if (a != end() || b != that.end()) return false; return true;
+      auto a = begin();
+      auto b = that.begin();
+      while (*a == *b && a != end() && b != that.end()) {
+        ++a;
+        ++b;
+      }
+      if (a != end() || b != that.end()) {
+        return false;
+      }
+      return true;
     }
   
   bool operator!=(const Slice<T, extent, stride>& that) const { return !(*this == that); }
@@ -284,18 +292,18 @@ public:
 
   operator Slice<T, std::dynamic_extent, stride>() const
     requires (extent != std::dynamic_extent) {
-    Slice<T, std::dynamic_extent, stride> res = Slice(*this);
+    Slice<T, std::dynamic_extent, stride> res = *this;
     return res;
   }
 
   operator Slice<T, extent, dynamic_stride>() const
     requires (stride != dynamic_stride) {
-    Slice<T, extent, dynamic_stride> res = Slice(*this);
+    Slice<T, extent, dynamic_stride> res = *this;
     return res;
   }
 
   operator Slice<T, std::dynamic_extent, dynamic_stride>() const {
-    Slice<T, std::dynamic_extent, dynamic_stride> res = Slice(*this);
+    Slice<T, std::dynamic_extent, dynamic_stride> res = *this;
     return res;
   }
 
