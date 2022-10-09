@@ -357,3 +357,6 @@ private:
 // special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
 template<class U>
 Slice(U& container) -> Slice<typename U::value_type>;
+
+template<typename Element, size_t size>
+Slice(std::array<Element, size>& array) -> Slice<Element, size>
