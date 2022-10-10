@@ -7,6 +7,7 @@
 
 inline constexpr std::ptrdiff_t dynamic_stride = -1;
 
+
 template<typename T, T value>
 class CompileTimeStorage {
 public:
