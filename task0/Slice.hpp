@@ -88,7 +88,7 @@ public:
 
   Slice() = default;
   Slice(const Slice&) = default;
-  Slice(Slice&&) = default;
+  explicit Slice(Slice&&) = default;
 
   Slice(T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd)
     requires (!std::is_same_v<T, std::remove_const_t<T>>) {
@@ -336,8 +336,8 @@ public:
     && extent != std::dynamic_extent && stride != dynamic_stride) {
     return Slice<const T, extent, stride>(
       const_cast<const T*>(this->data_),
-      std::dynamic_extent,
-      dynamic_stride
+      this->extent_(),
+      this->stride_()
     );
   }
 
@@ -345,7 +345,7 @@ public:
     requires (std::is_same_v<T, std::remove_const_t<T>> && stride != dynamic_stride) {
     return Slice<const T, std::dynamic_extent, stride>(
       const_cast<const T*>(this->data_),
-      std::dynamic_extent,
+      this->extent_(),
       this->stride_()
     );
   }
@@ -355,14 +355,16 @@ public:
     return Slice<const T, extent, dynamic_stride>(
       const_cast<const T*>(this->data_),
       this->extent_(),
-      dynamic_stride
+      this->stride_()
     );
   }
 
   operator Slice<const T, std::dynamic_extent, dynamic_stride>() const
     requires std::is_same_v<T, std::remove_const_t<T>> {
     return Slice<const T, std::dynamic_extent, dynamic_stride>(
-      const_cast<const T*>(this->data_)
+      const_cast<const T*>(this->data_),
+      this->extent_(),
+      this->stride_()
     );
   }
 
@@ -378,13 +380,13 @@ std::ptrdiff_t Slice<T, extent, stride>::iterator::skip = 1;
 // deduction guide
 // special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
 template<class U>
-Slice(U& container) -> Slice<typename U::value_type>;
+Slice(U&) -> Slice<typename U::value_type>;
 
-template<typename Element, size_t size>
-Slice(std::array<Element, size>& array) -> Slice<Element, size>;
+template<typename Type, size_t Size>
+Slice(std::array<Type, Size>&) -> Slice<Type, Size>;
 
 // template <std::contiguous_iterator It>
 // Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
 
-// template<typename T, std::size_t extent, std::ptrdiff_t stride>
-// Slice(const Slice<T, extent, stride>& that) -> Slice<T, extent, stride>;
+template<typename T, std::size_t extent, std::ptrdiff_t stride>
+Slice(const Slice<T, extent, stride>&) -> Slice<T, extent, stride>;
