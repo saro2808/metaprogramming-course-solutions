@@ -389,8 +389,8 @@ Slice(U&) -> Slice<typename U::value_type>;
 template<typename Type, size_t Size>
 Slice(std::array<Type, Size>&) -> Slice<Type, Size>;
 
-// template <std::contiguous_iterator It>
-// Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
+template <std::contiguous_iterator It>
+Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
 
 template<typename T, std::size_t extent, std::ptrdiff_t stride>
 Slice(const Slice<T, extent, stride>&) -> Slice<T, extent, stride>;
