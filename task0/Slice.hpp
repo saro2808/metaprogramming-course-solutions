@@ -65,6 +65,16 @@ template
   , std::size_t extent = std::dynamic_extent
   , std::ptrdiff_t stride = 1
   >
+class Slice;
+
+template<typename T, std::size_t extent, std::ptrdiff_t stride>
+std::ptrdiff_t* skip = &Slice<T, extent, stride>::iterator::skip;
+
+template
+  < class T
+  , std::size_t extent
+  , std::ptrdiff_t stride
+  >
 class Slice {
 public:
   using value_type = std::remove_cv_t<T>;
@@ -84,10 +94,8 @@ public:
   Slice(const Slice&) = default;
   Slice(Slice&&) = default;
 
-  Slice//<const T, extent, stride>
-  (T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd)
+  Slice(T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd)
     requires (!std::is_same_v<T, std::remove_const_t<T>>) {
-    //requires std::is_same_v<T, std::remove_const_t<T>> {
     data_ = const_cast<const T*>(dt);
     if (extent != std::dynamic_extent) {
       extent_() = extnt();
@@ -97,19 +105,16 @@ public:
     }
   }
 
-  Slice//<const T, std::dynamic_extent, dynamic_stride>
-  (T* dt)
-    //requires (std::is_same_v<T, std::remove_const_t<T>>
-    requires (!std::is_same_v<T, std::remove_const_t<T>>
-    && extent == std::dynamic_extent && stride == dynamic_stride) {
+  Slice(T* dt) requires (
+    !std::is_same_v<T, std::remove_const_t<T>>
+    && extent == std::dynamic_extent && stride == dynamic_stride
+  ) {
     data_ = const_cast<const T*>(dt);
   }
 
-  template<typename Element, size_t size>
-    requires (//extent != std::dynamic_extent && extent == size &&
-    std::is_same_v<T, Element>)
-  constexpr Slice//<Element, size>
-  (std::array<Element, size>& array) {
+  template<typename Type, size_t Size>
+    requires (std::is_same_v<T, Type>)
+  constexpr Slice(std::array<Type, Size>& array) {
     if constexpr (stride == dynamic_stride) {
       stride_() = 1;
     }
@@ -117,6 +122,7 @@ public:
       extent_() = array.size() / stride_();
     }
     data_ = array.data();
+    *::skip<T, extent, stride> = stride_();
   }
 
   template<class U>
@@ -132,11 +138,12 @@ public:
     }
     extent_() = container.size() / stride_();
     data_ = container.data();
+    *::skip<T, extent, stride> = stride_();
   }
 
   template <std::contiguous_iterator It>
-    //requires (extent == std::dynamic_extent)
   Slice(It first, std::size_t count, std::ptrdiff_t skip) {
+    *::skip<T, std::dynamic_extent, stride> = skip;
     if constexpr (stride == dynamic_stride) {
       stride_() = skip;
     } // else assert(stride_() == skip);
@@ -146,7 +153,7 @@ public:
     data_ = &*first;
   }
 
-  ~Slice() = default;
+  ~Slice() noexcept = default;
 
   ///////////////
   /// getters ///
@@ -162,6 +169,7 @@ public:
 
   class iterator: public std::random_access_iterator_tag {
   public:
+    static std::ptrdiff_t skip;
     using value_type = Slice::value_type;
     using difference_type = Slice::difference_type;
     using iterator_category = std::random_access_iterator_tag;
@@ -176,20 +184,20 @@ public:
     ~iterator() = default;
     reference operator*() const { return *ptr_; }
     pointer operator->() { return ptr_; }
-    reference operator[](const difference_type i) const { return iterator(ptr_ + i); }
-    iterator& operator++() { ptr_++; return *this; }
-    iterator operator++(int) { iterator it = *this; ++(*this); return it; }
-    iterator& operator--() { ptr_--; return *this; }
-    iterator operator--(int) { iterator it = *this; --(*this); return it; }
-    iterator operator+(size_type rhs) { return iterator(ptr_ + rhs); }
-    iterator operator-(size_type rhs) { return iterator(ptr_ - rhs); }
-    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n); }
-    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n); }
-    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n); }
-    difference_type operator-(const iterator& that) { return this->ptr_ - that.ptr_; }
-    friend difference_type operator-(const iterator& a, const iterator& b) { return a.ptr_ - b.ptr_; }
-    iterator& operator+=(const difference_type n) { return iterator(ptr_ += n); }
-    iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n); }
+    reference operator[](const difference_type i) const { return iterator(ptr_ + i*(*::skip<T, extent, stride>)); }
+    iterator& operator++() { ptr_ += *::skip<T, extent, stride>; return *this; }
+    iterator operator++(int) { iterator it = *this; (*this) += *::skip<T, extent, stride>; return it; }
+    iterator& operator--() { ptr_ -= *::skip<T, extent, stride>; return *this; }
+    iterator operator--(int) { iterator it = *this; (*this) -= *::skip<T, extent, stride>; return it; }
+    iterator operator+(size_type rhs) const { return iterator(ptr_ + rhs * *::skip<T, extent, stride>); }
+    iterator operator-(size_type rhs) const { return iterator(ptr_ - rhs * *::skip<T, extent, stride>); }
+    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n*(*::skip<T, extent, stride>)); }
+    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n*(*::skip<T, extent, stride>)); }
+    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n*(*::skip<T, extent, stride>)); }
+    difference_type operator-(const iterator& that) const { return this->ptr_ - that.ptr_; }
+    //friend difference_type operator-(const iterator& a, const iterator& b) { return a.ptr_ - b.ptr_; }
+    iterator& operator+=(const difference_type n) { return iterator(ptr_ += n*(*::skip<T, extent, stride>)); }
+    iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n*(*::skip<T, extent, stride>)); }
     inline bool operator==(const iterator& rhs) const { return ptr_ == rhs.ptr_; }
     inline bool operator!=(const iterator& rhs) const { return ptr_ != rhs.ptr_; }
     inline bool operator>(const iterator& rhs) const { return ptr_ > rhs.ptr_; }
@@ -255,15 +263,27 @@ public:
 
   Slice<T, std::dynamic_extent, dynamic_stride>
     Skip(std::ptrdiff_t skip) const {
+      *::skip<T, std::dynamic_extent, dynamic_stride> = skip * stride_();
       return Slice<T, std::dynamic_extent, dynamic_stride>(data_, (skip - 1 + extent_()) / skip, skip * stride_());
     }
 
   template <std::ptrdiff_t skip>
-  Slice<T, (extent - 1 + skip) / skip, stride * skip>
+  Slice<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip>
+    Skip() const
+    requires (extent != std::dynamic_extent) {
+      std::size_t extnt = (skip - 1 + extent_()) / skip;
+      std::ptrdiff_t strd = skip * stride_();
+      *::skip<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
+      return Slice<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip>(data_, extnt, strd);
+    }
+
+  template <std::ptrdiff_t skip>
+  Slice<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip>
     Skip() const {
       std::size_t extnt = (skip - 1 + extent_()) / skip;
       std::ptrdiff_t strd = skip * stride_();
-      return Slice<T, (extent - 1 + skip) / skip, stride * skip>(data_, extnt, strd);
+      *::skip<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
+      return Slice<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip>(data_, extnt, strd);
     }
 
   /////////////////
@@ -273,7 +293,7 @@ public:
   Slice& operator=(const Slice&) = default;
   Slice& operator=(Slice&&) = default;
 
-  constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i); }
+  constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i * *::skip<T, extent, stride>); }
   
   bool operator==(const Slice<T, extent, stride>& that) const {
       auto a = begin();
@@ -326,8 +346,7 @@ public:
   }
 
   operator Slice<const T, std::dynamic_extent, stride>() const
-    requires (std::is_same_v<T, std::remove_reference_t<T>>
-    && stride != dynamic_stride) {
+    requires (std::is_same_v<T, std::remove_const_t<T>> && stride != dynamic_stride) {
     return Slice<const T, std::dynamic_extent, stride>(
       const_cast<const T*>(this->data_),
       std::dynamic_extent,
@@ -336,7 +355,7 @@ public:
   }
 
   operator Slice<const T, extent, dynamic_stride>() const
-    requires (std::is_same_v<T, std::remove_reference_t<T>> && extent != std::dynamic_extent) {
+    requires (std::is_same_v<T, std::remove_const_t<T>> && extent != std::dynamic_extent) {
     return Slice<const T, extent, dynamic_stride>(
       const_cast<const T*>(this->data_),
       this->extent_(),
@@ -345,7 +364,7 @@ public:
   }
 
   operator Slice<const T, std::dynamic_extent, dynamic_stride>() const
-    requires std::is_same_v<T, std::remove_reference_t<T>> {
+    requires std::is_same_v<T, std::remove_const_t<T>> {
     return Slice<const T, std::dynamic_extent, dynamic_stride>(
       const_cast<const T*>(this->data_)
     );
@@ -357,6 +376,9 @@ private:
   [[no_unique_address]] StrideStorage<stride> stride_;
 };
 
+template<typename T, std::size_t extent, std::ptrdiff_t stride>
+std::ptrdiff_t Slice<T, extent, stride>::iterator::skip = 1;
+
 // deduction guide
 // special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
 template<class U>
@@ -365,5 +387,8 @@ Slice(U& container) -> Slice<typename U::value_type>;
 template<typename Element, size_t size>
 Slice(std::array<Element, size>& array) -> Slice<Element, size>;
 
-template <std::contiguous_iterator It>
-Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
+// template <std::contiguous_iterator It>
+// Slice(It first, std::size_t count, std::ptrdiff_t skip) -> Slice<typename It::value_type>;
+
+// template<typename T, std::size_t extent, std::ptrdiff_t stride>
+// Slice(const Slice<T, extent, stride>& that) -> Slice<T, extent, stride>;
