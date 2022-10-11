@@ -7,62 +7,6 @@
 
 inline constexpr std::ptrdiff_t dynamic_stride = -1;
 
-<<<<<<< HEAD
-
-template<typename T, T value>
-class CompileTimeStorage {
-public:
-  constexpr CompileTimeStorage() = default;
-  constexpr CompileTimeStorage(T) noexcept {}
-
-  constexpr const T operator()() const {
-    return value;
-  }
-};
-
-template<typename T>
-class RuntimeStorage {
-public:
-  constexpr RuntimeStorage() = default;
-  constexpr RuntimeStorage(T value) noexcept : value_(value) {}
-
-  constexpr T& operator()() {
-    return value_;
-  }
-
-  constexpr const T& operator()() const {
-    return value_;
-  }
-
-private:
-  T value_;
-};
-
-template<std::size_t value>
-class ExtentStorage: public CompileTimeStorage<std::size_t, value> {
-public:
-  constexpr ExtentStorage() = default;
-};
-
-template<>
-class ExtentStorage<std::dynamic_extent>: public RuntimeStorage<std::size_t> {
-public:
-  constexpr ExtentStorage() = default;
-};
-
-template<std::ptrdiff_t value>
-class StrideStorage: public CompileTimeStorage<std::ptrdiff_t, value> {
-public:
-  constexpr StrideStorage() = default;
-};
-
-template<>
-class StrideStorage<dynamic_stride>: public RuntimeStorage<std::ptrdiff_t> {
-public:
-  constexpr StrideStorage() = default;
-};
-=======
->>>>>>> 860ea5f (Revert "Task0")
 
 template<typename T, T value>
 class CompileTimeStorage {
