@@ -196,7 +196,6 @@ public:
     friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n*(*::skip<T, extent, stride>)); }
     friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n*(*::skip<T, extent, stride>)); }
     difference_type operator-(const iterator& that) const { return this->ptr_ - that.ptr_; }
-    //friend difference_type operator-(const iterator& a, const iterator& b) { return a.ptr_ - b.ptr_; }
     iterator& operator+=(const difference_type n) { return iterator(ptr_ += n*(*::skip<T, extent, stride>)); }
     iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n*(*::skip<T, extent, stride>)); }
     inline bool operator==(const iterator& rhs) const { return ptr_ == rhs.ptr_; }
