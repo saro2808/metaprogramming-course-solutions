@@ -32,7 +32,7 @@ public:
   constexpr const T& operator()() const {
     return value_;
   }
-
+  
 private:
   T value_;
 };
@@ -61,20 +61,13 @@ public:
   constexpr StrideStorage() = default;
 };
 
+template<typename T, std::size_t extent, std::ptrdiff_t stride>
+static std::ptrdiff_t skip = 1;
+
 template
   < class T
   , std::size_t extent = std::dynamic_extent
   , std::ptrdiff_t stride = 1
-  >
-class Slice;
-
-template<typename T, std::size_t extent, std::ptrdiff_t stride>
-std::ptrdiff_t* skip = &Slice<T, extent, stride>::iterator::skip;
-
-template
-  < class T
-  , std::size_t extent
-  , std::ptrdiff_t stride
   >
 class Slice {
 public:
@@ -104,13 +97,7 @@ public:
     if (stride != dynamic_stride) {
       stride_() = strd();
     }
-  }
-
-  Slice(T* dt) requires (
-    !std::is_same_v<T, std::remove_const_t<T>>
-    && extent == std::dynamic_extent && stride == dynamic_stride
-  ) {
-    data_ = const_cast<const T*>(dt);
+    ::skip<T, extent, stride> = stride_();
   }
 
   template<typename Type, size_t Size>
@@ -123,7 +110,7 @@ public:
       extent_() = array.size() / stride_();
     }
     data_ = array.data();
-    *::skip<T, extent, stride> = stride_();
+    ::skip<T, extent, stride> = stride_();
   }
 
   template<class U>
@@ -139,12 +126,12 @@ public:
     }
     extent_() = container.size() / stride_();
     data_ = container.data();
-    *::skip<T, extent, stride> = stride_();
+    ::skip<T, extent, stride> = stride_();
   }
 
   template <std::contiguous_iterator It>
   Slice(It first, std::size_t count, std::ptrdiff_t skip) {
-    *::skip<T, std::dynamic_extent, stride> = skip;
+    ::skip<T, std::dynamic_extent, stride> = skip;
     if constexpr (stride == dynamic_stride) {
       stride_() = skip;
     } // else assert(stride_() == skip);
@@ -170,7 +157,6 @@ public:
 
   class iterator: public std::random_access_iterator_tag {
   public:
-    static std::ptrdiff_t skip;
     using value_type = Slice::value_type;
     using difference_type = Slice::difference_type;
     using iterator_category = std::random_access_iterator_tag;
@@ -185,19 +171,19 @@ public:
     ~iterator() = default;
     reference operator*() const { return *ptr_; }
     pointer operator->() { return ptr_; }
-    reference operator[](const difference_type i) const { return iterator(ptr_ + i*(*::skip<T, extent, stride>)); }
-    iterator& operator++() { ptr_ += *::skip<T, extent, stride>; return *this; }
-    iterator operator++(int) { iterator it = *this; (*this) += *::skip<T, extent, stride>; return it; }
-    iterator& operator--() { ptr_ -= *::skip<T, extent, stride>; return *this; }
-    iterator operator--(int) { iterator it = *this; (*this) -= *::skip<T, extent, stride>; return it; }
-    iterator operator+(size_type rhs) const { return iterator(ptr_ + rhs * *::skip<T, extent, stride>); }
-    iterator operator-(size_type rhs) const { return iterator(ptr_ - rhs * *::skip<T, extent, stride>); }
-    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n*(*::skip<T, extent, stride>)); }
-    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n*(*::skip<T, extent, stride>)); }
-    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n*(*::skip<T, extent, stride>)); }
+    reference operator[](const difference_type i) const { return iterator(ptr_ + i*(::skip<T, extent, stride>)); }
+    iterator& operator++() { ptr_ += ::skip<T, extent, stride>; return *this; }
+    iterator operator++(int) { iterator it = *this; (*this) += ::skip<T, extent, stride>; return it; }
+    iterator& operator--() { ptr_ -= ::skip<T, extent, stride>; return *this; }
+    iterator operator--(int) { iterator it = *this; (*this) -= ::skip<T, extent, stride>; return it; }
+    iterator operator+(size_type rhs) const { return iterator(ptr_ + rhs * ::skip<T, extent, stride>); }
+    iterator operator-(size_type rhs) const { return iterator(ptr_ - rhs * ::skip<T, extent, stride>); }
+    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n*(::skip<T, extent, stride>)); }
+    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n*(::skip<T, extent, stride>)); }
+    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n*(::skip<T, extent, stride>)); }
     difference_type operator-(const iterator& that) const { return this->ptr_ - that.ptr_; }
-    iterator& operator+=(const difference_type n) { return iterator(ptr_ += n*(*::skip<T, extent, stride>)); }
-    iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n*(*::skip<T, extent, stride>)); }
+    iterator& operator+=(const difference_type n) { return iterator(ptr_ += n*(::skip<T, extent, stride>)); }
+    iterator& operator-=(const difference_type n) { return iterator(ptr_ -= n*(::skip<T, extent, stride>)); }
     inline bool operator==(const iterator& rhs) const { return ptr_ == rhs.ptr_; }
     inline bool operator!=(const iterator& rhs) const { return ptr_ != rhs.ptr_; }
     inline bool operator>(const iterator& rhs) const { return ptr_ > rhs.ptr_; }
@@ -263,7 +249,7 @@ public:
 
   Slice<T, std::dynamic_extent, dynamic_stride>
     Skip(std::ptrdiff_t skip) const {
-      *::skip<T, std::dynamic_extent, dynamic_stride> = skip * stride_();
+      ::skip<T, std::dynamic_extent, dynamic_stride> = skip * stride_();
       return Slice<T, std::dynamic_extent, dynamic_stride>(data_, (skip - 1 + extent_()) / skip, skip * stride_());
     }
 
@@ -273,7 +259,7 @@ public:
     requires (extent != std::dynamic_extent) {
       std::size_t extnt = (skip - 1 + extent_()) / skip;
       std::ptrdiff_t strd = skip * stride_();
-      *::skip<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
+      ::skip<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
       return Slice<T, (extent - 1 + skip) / skip, stride == dynamic_stride ? dynamic_stride : stride * skip>(data_, extnt, strd);
     }
 
@@ -282,7 +268,7 @@ public:
     Skip() const {
       std::size_t extnt = (skip - 1 + extent_()) / skip;
       std::ptrdiff_t strd = skip * stride_();
-      *::skip<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
+      ::skip<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip> = strd;
       return Slice<T, std::dynamic_extent, stride == dynamic_stride ? dynamic_stride : stride * skip>(data_, extnt, strd);
     }
 
@@ -293,18 +279,14 @@ public:
   Slice& operator=(const Slice&) = default;
   Slice& operator=(Slice&&) = default;
 
-  constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i * *::skip<T, extent, stride>); }
+  constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i * ::skip<T, extent, stride>); }
   
   bool operator==(const Slice<T, extent, stride>& that) const {
       auto a = begin();
       auto b = that.begin();
-      while (*a == *b && a != end() && b != that.end()) {
-        ++a;
-        ++b;
-      }
-      if (a != end() || b != that.end()) {
+      while (*a == *b && a != end() && b != that.end()) { ++a; ++b; }
+      if (a != end() || b != that.end())
         return false;
-      }
       return true;
     }
   
@@ -377,9 +359,6 @@ private:
   [[no_unique_address]] ExtentStorage<extent> extent_;
   [[no_unique_address]] StrideStorage<stride> stride_;
 };
-
-template<typename T, std::size_t extent, std::ptrdiff_t stride>
-std::ptrdiff_t Slice<T, extent, stride>::iterator::skip = 1;
 
 // deduction guide
 // special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
