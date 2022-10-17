@@ -134,7 +134,7 @@ struct Replicate<0, T> : Nil {};
 
 // Map
 template< template<class> class F, TypeList TL >
-struct Map;
+struct Map : Nil {};
 
 template< template<class> class F, TypeSequence TL >
 struct Map<F, TL> {
@@ -142,22 +142,24 @@ struct Map<F, TL> {
     using Tail = Map<F, typename TL::Tail>;
 };
 
-template< template<class> class F, Empty E >
-struct Map<F, E> : Nil {};
-
 // Filter
 template< template<class> class P, TypeList TL >
-struct Filter;
+struct Filter : Nil {};
 
 template< template<class> class P, TypeSequence TL >
-    requires (requires { typename P<typename TL::Head>::Value; })
+    requires (requires { P<typename TL::Head>::Value; } && P<typename TL::Head>::Value)
 struct Filter<P, TL> {
-    using Head = std::conditional_t<P<typename TL::Head>::Value, typename TL::Head, Nil>;
+    using Head = typename TL::Head;
     using Tail = Filter<P, typename TL::Tail>;
 };
 
-template< template<class> class P, Empty E >
-struct Filter<P, E> : Nil {};
+template< template<class> class P, TypeSequence TL >
+    requires (requires { P<typename TL::Head>::Value; } && !P<typename TL::Head>::Value)
+struct Filter<P, TL> {
+	using Answer = Filter<P, typename TL::Tail>;
+    using Head = Answer::Head;
+    using Tail = Answer::Tail;
+};
 
 // Iterate
 template< template<class> class F, class T >
@@ -174,17 +176,63 @@ struct Cycle {
 };
 
 // Inits
-template< TypeList TL >
-struct Inits;
+/*template< TypeList TL >
+struct InitsHelper : Nil {};
+
+template< TypeSequence TL >
+struct InitsHelper<TL> {
+	template< TypeList L >
+	struct AppendHead {
+	    using Head = typename TL::Head;
+	    using Tail = L;
+	};
+	template< Empty E >
+	struct AppendHead<E> : Nil {};
+    	using Head = typename TL::Head;
+	using Tail = Map< AppendHead, InitsHelper<typename TL::Tail> >;
+};
+
+template< TypeList L >
+struct AppendNil {
+    using Head = Nil;
+    using Tail = L;
+};
+template<Empty E>
+struct AppendNil<E> : Nil {};
 
 template< TypeList TL >
 struct Inits {
-    using Head = Nil;
-    using Tail = Cons<Cons<Head, typename TL::Head>, Inits<typename TL::Tail>>;
+	using Head = Nil;
+	using Tail = Map<AppendNil, Inits<TL>>;
 };
 
-template< Empty E >
-struct Inits<E> : Nil {};
+template<Empty E>
+struct Inits<E> : Nil {};*/
+
+template< TypeList TL >
+struct InitsHelper : Nil {};
+
+template< TypeSequence TL >
+struct InitsHelper<TL> {
+	
+	template<TypeList L>
+	struct AppendHead : Nil {};
+
+	template<TypeSequence L>
+	struct AppendHead<L> {
+		using Head = typename TL::Head;
+		using Tail = L;
+	};
+	
+	using Head = typename TL::Head;
+	using Tail = Map<AppendHead, InitsHelper<typename TL::Tail>>;
+};
+
+template< TypeList TL >
+struct Inits {
+	using Head = Nil;
+	using Tail = InitsHelper<TL>;
+};
 
 // Tails
 template< TypeList TL >
@@ -201,16 +249,19 @@ struct Tails<E> : Nil {};
 
 // Scanl
 template< template<class, class> class OP, class T, TypeList TL >
-struct Scanl;
+struct Scanl : Nil {};
 
-template< template<class, class> class OP, class T, TypeList TL>
-struct Scanl {
-    using Head = T;
-    using Tail = Cons< OP<Head, typename TL::Head>, Scanl<OP, typename TL::Head, typename TL::Tail> >;
+template< template<class, class> class OP, class T, TypeSequence TL >
+struct Scanl<OP, T, TL> {
+	using Head = T;
+    using Tail = Scanl<OP, OP<Head, typename TL::Head>, typename TL::Tail>;
 };
 
 template< template<class, class> class OP, class T, Empty E >
-struct Scanl<OP, T, E> : Nil {};
+struct Scanl<OP, T, E> {
+	using Head = T;
+	using Tail = Nil;
+};
 
 // Foldl
 template< template<class, class> class OP, class T, TypeList TL >
@@ -223,7 +274,9 @@ struct FoldlHelper {
 
 template< template<class, class> class OP, class T, TypeList TL >
     requires (Empty<TL> || Empty<typename TL::Tail>)
-struct FoldlHelper<OP, T, TL> : Nil {};
+struct FoldlHelper<OP, T, TL> {
+	using Value = T;
+};
 
 template< template<class, class> class OP, class T, TypeList TL >
 using Foldl = typename FoldlHelper<OP, T, TL>::Value;
