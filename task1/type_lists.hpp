@@ -2,7 +2,7 @@
 
 #include <concepts>
 
-#include <type_tuples.hpp>
+#include "type_tuples.hpp"
 
 using type_tuples::TypeTuple;
 using type_tuples::TTuple;
@@ -68,24 +68,21 @@ struct Repeat {
 };
 
 // Take
-template< int N, TypeList TL >
-    requires (N >= 0)
-struct Take;
-
 template< int N, TypeSequence TL >
     requires (N > 0)
-struct Take<N, TL> {
-    using Head = Cons<typename TL::Head, typename Tail>;
+struct Take {
+    using Head = Cons<typename TL::Head, Take<N - 1, typename TL::Tail>>;
     using Tail = Take<N - 1, typename TL::Tail>;
 };
 
-template< int N, TypeList TL >
-    requires (N == 0 || Empty<TL>)
-struct Take<N, TL> : Nil {};
+template< TypeList TL >
+struct Take<0, TL> : Nil {};
+
+template< int N >
+struct Take<N, Nil> : Nil {};
 
 // Drop
-template< int N, TypeList TL >
-    requires (N >= 0)
+template<int N, TypeList TL>
 struct Drop;
 
 template< int N, TypeSequence TL >
@@ -108,7 +105,6 @@ struct Drop<N, TL> : Nil {};
 
 // Replicate
 template< int N, class T >
-    requires (N >= 0)
 struct Replicate;
 
 template< int N, class T >
@@ -136,7 +132,6 @@ struct Map<F, E> : Nil {};
 
 // Filter
 template< template<class> class P, TypeList TL >
-    requires (requires { typename P<typename TL::Head>::Value; })
 struct Filter;
 
 template< template<class> class P, TypeSequence TL >
@@ -196,9 +191,7 @@ struct Scanl;
 template< template<class, class> class OP, class T, TypeList TL>
 struct Scanl {
     using Head = T;
-    using Tail = Cons< typename OP<Head, typename TL::Head>
-                     , Scanl<OP, typename TL::Head, typename TL::Tail>
-                     >;
+    using Tail = Cons< OP<Head, typename TL::Head>, Scanl<OP, typename TL::Head, typename TL::Tail> >;
 };
 
 template< template<class, class> class OP, class T, Empty E >
@@ -210,10 +203,7 @@ struct FoldlHelper;
 
 template< template<class, class> class OP, class T, TypeList TL >
 struct FoldlHelper {
-    using Value = typename FoldlHelper< OP
-                                      , typename OP<T, typename TL::Head>
-                                      , typename TL::Tail
-                                      >::Value;
+    using Value = typename FoldlHelper< OP, OP<T, typename TL::Head>, typename TL::Tail>::Value;
 };
 
 template< template<class, class> class OP, class T, TypeList TL >
@@ -221,7 +211,7 @@ template< template<class, class> class OP, class T, TypeList TL >
 struct FoldlHelper<OP, T, TL> : Nil {};
 
 template< template<class, class> class OP, class T, TypeList TL >
-using Foldl = typename FoldlHelper::Value;
+using Foldl = typename FoldlHelper<OP, T, TL>::Value;
 
 // Zip2
 template< TypeList L, TypeList R >
@@ -235,14 +225,23 @@ struct Zip2 {
 
 template< TypeList L, TypeList R >
     requires (Empty<L> || Empty<R>)
-struct Zip2 : Nil {};
+struct Zip2<L, R> : Nil {};
 
 // Zip
-template< TypList... TLs >
+template< TypeList... TLs >
 struct Zip;
 
-template< TypeList TL, TypList... TLs >
-struct Zip {
+template< TypeList L, TypeList R, TypeList... TLs >
+struct Zip<L, R, TLs...> {
+    using Answer = Zip<Zip2<L, R>, TLs...>;
+    using Head = Answer::Head;
+    using Tail = Answer::Tail;
 };
+
+template< TypeList TL >
+struct Zip<TL> : Nil {};
+
+template< Empty E >
+struct Zip<E> : Nil {};
 
 } // namespace type_lists
