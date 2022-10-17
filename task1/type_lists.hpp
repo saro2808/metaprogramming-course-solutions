@@ -26,39 +26,49 @@ template<class TL>
 concept TypeList = Empty<TL> || TypeSequence<TL>;
 
 // Cons
-// template< class T, class... TL >
-// struct Cons {
-//     using type = Cons<T, typename Cons<TL...>::type>::type;
-// };
-
-// template< class T, Empty E >
-// struct Cons<T, E> {
-//     using type = T;
-// };
-
-// template< Empty E >
-// struct Cons<E> {};
 template<class T, class U>
-struct Cons;
-
-// FromTuple
-template< template< class... > class TT, class... Ts >
-    requires TypeTuple<TT<Ts...>>
-struct FromTuple;
-
-template< template< class, class... > class TT, class T, class... Ts >
-    requires TypeTuple<TT<T, Ts...>>
-struct FromTuple<TT, T, Ts...> {
-    using Head = T;
-    using Tail = FromTuple<TT, Ts...>;
+struct Cons {
+	using Head = T;
+	using Tail = U;
 };
 
-template< template<class> class TT >
-struct FromTuple<TT, Nil> : Nil {};
+// FromTuple
+template< TypeTuple TT >
+struct FromTuple : Nil {};
+
+template< class T, class... Ts >
+struct FromTuple<TTuple<T, Ts...>> {
+    using Head = T;
+    using Tail = FromTuple<TTuple<Ts...>>;
+};
 
 // ToTuple
-template< TypeList TL >
-struct ToTuple;
+template< class... Ts >
+struct ToTupleHelper;
+
+template< class... Ts >
+struct ToTupleHelper {
+	using Value = TTuple<Ts...>;
+};
+
+template< TypeSequence TL, class... Ts >
+struct ToTupleHelper<TL, Ts...> {
+	using Value = typename ToTupleHelper<typename TL::Tail, Ts..., typename TL::Head>::Value;
+};
+
+template< Empty E, class... Ts >
+struct ToTupleHelper<E, Ts...> {
+	using Value = typename ToTupleHelper<Ts...>::Value;
+};
+
+/*template< TypeSequence TL, class... Ts >
+struct ToTupleHelper<Ts..., TL> {
+	using TypeListed = FromTuple<TTuple<Ts...>>;
+	using Value = typename ToTupleHelper<TypeListed, TL>::Value;
+};*/
+
+template< class... Ts >
+using ToTuple = typename ToTupleHelper<Ts...>::Value;
 
 // Repeat
 template<class T>
@@ -68,40 +78,45 @@ struct Repeat {
 };
 
 // Take
+template< int N, TypeList TL >
+struct Take;
+
 template< int N, TypeSequence TL >
     requires (N > 0)
-struct Take {
-    using Head = Cons<typename TL::Head, Take<N - 1, typename TL::Tail>>;
+struct Take<N, TL> {
+    using Head = typename TL::Head;
     using Tail = Take<N - 1, typename TL::Tail>;
 };
 
 template< TypeList TL >
 struct Take<0, TL> : Nil {};
 
-template< int N >
-struct Take<N, Nil> : Nil {};
+template< int N, Empty E >
+struct Take<N, E> : Nil {};
 
 // Drop
 template<int N, TypeList TL>
-struct Drop;
+struct DropHelper;
 
 template< int N, TypeSequence TL >
     requires (N > 0 && !Empty<typename TL::Tail>)
-struct Drop<N, TL> {
-    using Answer = Drop<N - 1, typename TL::Tail>;
-    using Head = typename Answer::Head;
-    using Tail = typename Answer::Tail;
+struct DropHelper<N, TL> {
+    using Value = typename DropHelper<N - 1, typename TL::Tail>::Value;
 };
 
-template< TypeList TL >
-struct Drop<0, TL> {
-    using Head = typename TL::Head;
-    using Tail = typename TL::Tail;
+template< TypeSequence TL >
+struct DropHelper<0, TL> {
+    using Value = TL;
 };
 
 template< int N, TypeList TL >
     requires (Empty<TL> || Empty<typename TL::Tail>)
-struct Drop<N, TL> : Nil {};
+struct DropHelper<N, TL> : Nil {
+	using Value = Nil;
+};
+
+template< int N, TypeList TL >
+using Drop = typename DropHelper<N, TL>::Value;
 
 // Replicate
 template< int N, class T >
@@ -154,8 +169,8 @@ struct Iterate {
 // Cycle
 template< TypeList TL >
 struct Cycle {
-    using Head = TL;
-    using Tail = Cycle<TL>;
+	using Head = typename TL::Head;
+	using Tail = Cycle<FromTuple<ToTuple<typename TL::Tail, Cons<typename TL::Head, Nil>>>>;
 };
 
 // Inits
