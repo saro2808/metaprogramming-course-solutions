@@ -61,12 +61,6 @@ struct ToTupleHelper<E, Ts...> {
 	using Value = typename ToTupleHelper<Ts...>::Value;
 };
 
-/*template< TypeSequence TL, class... Ts >
-struct ToTupleHelper<Ts..., TL> {
-	using TypeListed = FromTuple<TTuple<Ts...>>;
-	using Value = typename ToTupleHelper<TypeListed, TL>::Value;
-};*/
-
 template< class... Ts >
 using ToTuple = typename ToTupleHelper<Ts...>::Value;
 
@@ -176,39 +170,6 @@ struct Cycle {
 };
 
 // Inits
-/*template< TypeList TL >
-struct InitsHelper : Nil {};
-
-template< TypeSequence TL >
-struct InitsHelper<TL> {
-	template< TypeList L >
-	struct AppendHead {
-	    using Head = typename TL::Head;
-	    using Tail = L;
-	};
-	template< Empty E >
-	struct AppendHead<E> : Nil {};
-    	using Head = typename TL::Head;
-	using Tail = Map< AppendHead, InitsHelper<typename TL::Tail> >;
-};
-
-template< TypeList L >
-struct AppendNil {
-    using Head = Nil;
-    using Tail = L;
-};
-template<Empty E>
-struct AppendNil<E> : Nil {};
-
-template< TypeList TL >
-struct Inits {
-	using Head = Nil;
-	using Tail = Map<AppendNil, Inits<TL>>;
-};
-
-template<Empty E>
-struct Inits<E> : Nil {};*/
-
 template< TypeList TL >
 struct InitsHelper : Nil {};
 
@@ -224,7 +185,7 @@ struct InitsHelper<TL> {
 		using Tail = L;
 	};
 	
-	using Head = typename TL::Head;
+	using Head = Cons<typename TL::Head, Nil>;
 	using Tail = Map<AppendHead, InitsHelper<typename TL::Tail>>;
 };
 
@@ -236,16 +197,19 @@ struct Inits {
 
 // Tails
 template< TypeList TL >
-struct Tails;
+struct Tails : Nil {};
 
-template< TypeList TL >
-struct Tails {
+template< TypeSequence TL >
+struct Tails<TL> {
     using Head = TL;
-    using Tail = Tails< typename TL::Tail>;
+    using Tail = Tails<typename TL::Tail>;
 };
 
 template< Empty E >
-struct Tails<E> : Nil {};
+struct Tails<E> {
+	using Head = E;
+	using Tail = Nil;
+};
 
 // Scanl
 template< template<class, class> class OP, class T, TypeList TL >
@@ -313,3 +277,4 @@ template< Empty E >
 struct Zip<E> : Nil {};
 
 } // namespace type_lists
+
