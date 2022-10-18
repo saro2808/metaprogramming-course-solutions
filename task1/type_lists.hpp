@@ -261,20 +261,49 @@ struct Zip2<L, R> : Nil {};
 
 // Zip
 template< TypeList... TLs >
-struct Zip;
+struct ZipHelper;
 
-template< TypeList L, TypeList R, TypeList... TLs >
-struct Zip<L, R, TLs...> {
-    using Answer = Zip<Zip2<L, R>, TLs...>;
-    using Head = Answer::Head;
-    using Tail = Answer::Tail;
+template< TypeList L, TypeList R >
+struct Zip2Helper;
+
+template< TypeList L, TypeList R >
+struct Zip2Helper {
+    using Head = Cons<typename L::Head, typename R::Head>;
+    using Tail = Zip2Helper<typename L::Tail, typename R::Tail>;
 };
 
-template< TypeList TL >
-struct Zip<TL> : Nil {};
+template< TypeList L, TypeList R >
+    requires (Empty<L> || Empty<R>)
+struct Zip2Helper<L, R> : Nil {};
+
+template< TypeSequence TL, TypeList... TLs >
+struct ZipHelper<TL, TLs...> {
+	using Answer = Zip2Helper<TL, ZipHelper<TLs...>>;
+	using Head = typename Answer::Head;
+	using Tail = typename Answer::Tail;
+};
+
+template< TypeSequence TL >
+	requires requires { !TypeTuple<typename TL::Head>; }
+struct ZipHelper<TL> {
+	using Head = Cons<typename TL::Head, Nil>;
+	using Tail = ZipHelper<typename TL::Tail>;
+};
+
+template< TypeSequence TL >
+struct ZipHelper<TL> {
+        using Head = typename TL::Head;
+        using Tail = ZipHelper<typename TL::Tail>;
+};
 
 template< Empty E >
-struct Zip<E> : Nil {};
+struct ZipHelper<E> : Nil {
+	using Head = Nil;
+	using Tail = Nil;
+};
+
+template< TypeList... TLs >
+using Zip = Map<ToTuple, ZipHelper<TLs...>>;
 
 } // namespace type_lists
 
