@@ -2,7 +2,7 @@
 
 #include <concepts>
 
-#include "type_tuples.hpp"
+#include <type_tuples.hpp>
 
 using type_tuples::TypeTuple;
 using type_tuples::TTuple;
