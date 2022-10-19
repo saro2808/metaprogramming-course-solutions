@@ -1,1 +1,1 @@
-# metaprogramming
+# metaprogramming-course-solutions
