@@ -44,12 +44,10 @@ struct FromTuple<TTuple<T, Ts...>> {
 
 // ToTuple
 template< class... Ts >
-struct ToTupleHelper;
-
-template< class... Ts >
 struct ToTupleHelper {
 	using Value = TTuple<Ts...>;
 };
+
 
 template< TypeSequence TL, class... Ts >
 struct ToTupleHelper<TL, Ts...> {
@@ -304,6 +302,27 @@ struct ZipHelper<E> : Nil {
 
 template< TypeList... TLs >
 using Zip = Map<ToTuple, ZipHelper<TLs...>>;
+
+// GroupBy
+template< template<class, class> class EQ, TypeList TL >
+struct GroupBy;
+
+template< template<class, class> class EQ, TypeSequence TL >
+	requires EQ<typename TL::Head, typename TL::Tail::Head>::Value
+struct GroupBy<EQ, TL> {
+	using Prev = GroupBy<EQ, typename TL::Tail>;
+	using Head = Cons<typename TL::Head, typename Prev::Head>;
+	using Tail = typename Prev::Tail;
+};
+
+template< template<class, class> class EQ, TypeSequence TL >
+struct GroupBy<EQ, TL> {
+	using Head = Cons<typename TL::Head, Nil>;
+	using Tail = GroupBy<EQ, typename TL::Tail>;
+};
+
+template< template<class, class> class EQ, Empty E >
+struct GroupBy<EQ, E> : Nil {};
 
 } // namespace type_lists
 
