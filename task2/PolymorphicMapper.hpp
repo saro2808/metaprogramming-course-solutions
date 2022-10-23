@@ -1,12 +1,6 @@
 #pragma once
 
 #include <optional>
-#include <type_traits>
-
-/*template<typename Base, typename T>
-inline bool isInstanceOf(const T *ptr) {
-	return dynamic_cast<const Base*>(ptr) != nullptr;
-}*/
 
 template<class From, auto target>
 struct Mapping {
@@ -22,9 +16,6 @@ struct PolymorphicMapper;
 template <class Base, class Target, class Mapping, class... Mappings>
 struct PolymorphicMapper<Base, Target, Mapping, Mappings...> {
 	static std::optional<Target> map(const Base& object) {
-		/*if (isInstanceOf<const typename Mapping::Class*>(&object)) {
-			return Mapping::value();
-		}*/
 		try {
 			dynamic_cast<const typename Mapping::Class&>(object);
 			return Mapping::value();
