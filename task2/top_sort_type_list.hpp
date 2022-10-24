@@ -7,10 +7,10 @@ namespace type_lists
 
 template<class TL>
 concept TypeSequence =
-    requires {
-        typename TL::Head;
-        typename TL::Tail;
-    };
+	requires {
+		typename TL::Head;
+		typename TL::Tail;
+	};
 
 struct Nil {};
 
