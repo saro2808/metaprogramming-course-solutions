@@ -2,6 +2,7 @@
 
 #include <optional>
 #include <type_traits>
+#include "top_sort_type_list.hpp"
 
 template<class From, auto target>
 struct Mapping {
@@ -29,25 +30,39 @@ struct CheckVaArgs<Base, Target> {
 	constexpr static bool Value = true;
 };
 
-template <class Base, class Target, class Mapping, class... Mappings>
-	requires (CheckVaArgs<Base, Target, Mapping, Mappings...>::Value)
-struct PolymorphicMapper<Base, Target, Mapping, Mappings...> {
-	static std::optional<Target> map(const Base& object) {
-		try {
-			dynamic_cast<const typename Mapping::Class&>(object);
-			
-			return Mapping::value();
-		}
-		catch (const std::bad_cast& e) {
-			return PolymorphicMapper<Base, Target, Mappings...>::map(object);
-		}
-	}
+using type_lists::TypeList;
+using type_lists::Empty;
+using type_lists::VaArgsToTypeList;
+using type_lists::TopSort;
 
+template<class Base, class Target, TypeList TL>
+struct PolymorphicMapperHelper;
+
+template <class Base, class Target, class... Mappings>
+	requires (CheckVaArgs<Base, Target, Mappings...>::Value)
+struct PolymorphicMapper<Base, Target, Mappings...> {
+	static std::optional<Target> map(const Base& object) {
+		return PolymorphicMapperHelper<Base, Target, TopSort<VaArgsToTypeList<Mappings...>>>::map(object);
+	}
 };
 
-template <class Base, class Target>
-struct PolymorphicMapper<Base, Target> {
-	static std::optional<Target> map(const Base&) {
+template <class Base, class Target, TypeList TL>
+struct PolymorphicMapperHelper {
+	static std::optional<Target> map(const Base& object) {
+		try {
+			dynamic_cast<const typename TL::Head::Class&>(object);
+			return TL::Head::value();
+		}
+		catch (const std::bad_cast& e) {
+			return PolymorphicMapperHelper<Base, Target, typename TL::Tail>::map(object);
+		}
+	}
+};
+
+template<class Base, class Target, Empty E>
+struct PolymorphicMapperHelper<Base, Target, E> {
+	static std::optional<Target> map(const Base& object) {
 		return std::nullopt;
 	}
 };
+
