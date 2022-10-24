@@ -61,8 +61,7 @@ struct PolymorphicMapperHelper {
 
 template<class Base, class Target, Empty E>
 struct PolymorphicMapperHelper<Base, Target, E> {
-	static std::optional<Target> map(const Base& object) {
+	static std::optional<Target> map(const Base&) {
 		return std::nullopt;
 	}
 };
-
