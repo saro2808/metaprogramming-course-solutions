@@ -130,7 +130,7 @@ public:
   }
 
   template <std::contiguous_iterator It>
-  Slice(It first, std::size_t count, std::ptrdiff_t skip) {
+  Slice(It first, std::size_t count, std::ptrdiff_t skip) : data_(&*first) {
     ::skip<T, std::dynamic_extent, stride> = skip;
     if constexpr (stride == dynamic_stride) {
       stride_() = skip;
@@ -138,7 +138,6 @@ public:
     if constexpr (extent == std::dynamic_extent) {
       extent_() = count;
     }
-    data_ = &*first;
   }
 
   ~Slice() noexcept = default;
@@ -292,66 +291,14 @@ public:
   
   bool operator!=(const Slice<T, extent, stride>& that) const { return !(*this == that); }
   
-  /////////////
-  /// casts ///
-  /////////////
+  ////////////
+  /// cast ///
+  ////////////
 
-  operator Slice<T, std::dynamic_extent, dynamic_stride>() const
-    requires (stride != dynamic_stride && extent != std::dynamic_extent) {
-    return Slice<T, std::dynamic_extent, dynamic_stride>(
-      this->data_, this->extent_(), this->stride_()
-    );
-  }
-
-  operator Slice<T, std::dynamic_extent, stride>() const
-    requires (extent != std::dynamic_extent) {
-    return Slice<T, std::dynamic_extent, stride>(
-      this->data_, this->extent_(), this->stride_()
-    );
-  }
-
-  operator Slice<T, extent, dynamic_stride>() const
-    requires (stride != dynamic_stride) {
-    return Slice<T, extent, dynamic_stride>(
-      this->data_, this->extent_(), this->stride_()
-    );
-  }
-
-  operator Slice<const T, extent, stride>() const
-    requires (std::is_same_v<T, std::remove_const_t<T>>
-    && extent != std::dynamic_extent && stride != dynamic_stride) {
-    return Slice<const T, extent, stride>(
-      const_cast<const T*>(this->data_),
-      this->extent_(),
-      this->stride_()
-    );
-  }
-
-  operator Slice<const T, std::dynamic_extent, stride>() const
-    requires (std::is_same_v<T, std::remove_const_t<T>> && stride != dynamic_stride) {
-    return Slice<const T, std::dynamic_extent, stride>(
-      const_cast<const T*>(this->data_),
-      this->extent_(),
-      this->stride_()
-    );
-  }
-
-  operator Slice<const T, extent, dynamic_stride>() const
-    requires (std::is_same_v<T, std::remove_const_t<T>> && extent != std::dynamic_extent) {
-    return Slice<const T, extent, dynamic_stride>(
-      const_cast<const T*>(this->data_),
-      this->extent_(),
-      this->stride_()
-    );
-  }
-
-  operator Slice<const T, std::dynamic_extent, dynamic_stride>() const
-    requires std::is_same_v<T, std::remove_const_t<T>> {
-    return Slice<const T, std::dynamic_extent, dynamic_stride>(
-      const_cast<const T*>(this->data_),
-      this->extent_(),
-      this->stride_()
-    );
+  template<class newT, std::size_t newExtent, std::ptrdiff_t newStride>
+    requires (std::is_same_v<newT, T> || std::is_same_v<newT, const T>)
+  operator Slice<newT, newExtent, newStride>() const {
+    return Slice<newT, newExtent, newStride>(data_, extent_(), stride_());
   }
 
 private:
@@ -360,7 +307,7 @@ private:
   [[no_unique_address]] StrideStorage<stride> stride_;
 };
 
-// deduction guide
+// deduction guides
 // special thanks to https://stackoverflow.com/questions/44350952/how-to-infer-template-parameters-from-constructors
 template<class U>
 Slice(U&) -> Slice<typename U::value_type>;
