@@ -23,31 +23,35 @@ private:
   Logger logger_;
 };
 
+struct LogInfo {
+  void null() {accessCount = 0; endOfExpression = false; expressionLogged = false;}
+  unsigned int accessCount = 0;
+  bool endOfExpression = false;
+  bool expressionLogged = false;
+};
+
 template <class T>
 class Proxy {
 public:
   template <std::invocable<unsigned int> Logger>
-  Proxy(T* value, std::shared_ptr<Logger> logger, unsigned int* accessCount, bool* endOfExpression, bool* expressionLogged)
-  : value_(value), logger_(logger), 
-  accessCount_(accessCount), endOfExpression_(endOfExpression), expressionLogged_(expressionLogged) {}
+  Proxy(T* value, std::shared_ptr<Logger> logger, LogInfo* logInfo)
+  : value_(value), logger_(logger), logInfo_(logInfo) {}
   
   T* operator->() {
-    ++*accessCount_;
+    ++logInfo_->accessCount;
     return value_;
   }
 
   ~Proxy() {
-    *endOfExpression_ = true;
-    if (logger_ && !*expressionLogged_) {
-      (*logger_)(*accessCount_);
-      *expressionLogged_ = true;
+    logInfo_->endOfExpression = true;
+    if (logger_ && !logInfo_->expressionLogged) {
+      (*logger_)(logInfo_->accessCount);
+      logInfo_->expressionLogged = true;
     }
   }
   
 private:
-  bool* endOfExpression_ = nullptr;
-  bool* expressionLogged_ = nullptr;
-  unsigned int* accessCount_ = nullptr;
+  LogInfo* logInfo_{nullptr};
   
   T* value_{nullptr};
   std::shared_ptr<AbstractLogger> logger_{nullptr};
@@ -69,13 +73,10 @@ public:
   const T& operator *() const { return value_; }
 
   Proxy<T> operator ->() {
-    if (endOfExpression_) {
-      accessCount_ = 0;
-      endOfExpression_ = false;
-      expressionLogged_ = false;
+    if (logInfo_.endOfExpression) {
+      logInfo_.null();
     }
-    return Proxy<T>(&value_, logger_,
-        &accessCount_, &endOfExpression_, &expressionLogged_);
+    return Proxy<T>(&value_, logger_, &logInfo_);
   }
 
   Spy() = default;
@@ -88,14 +89,18 @@ public:
     requires std::assignable_from<T&, T> {
     value_ = other.value_;
     logger_ = other.logger_;
-    endOfExpression_ = false;
-    expressionLogged_ = false;
-    accessCount_ = 0;
+    logInfo_.null();
     return *this;
   }
   
-  Spy& operator=(Spy&&) noexcept
-    requires std::movable<T> = default;
+  Spy& operator=(Spy&& other)
+    requires std::movable<T> {
+    value_ = std::move(other.value_);
+    logger_ = std::move(other.logger_);
+    other.logInfo_.null();
+    logInfo_.null();
+    return *this;
+  }
 
   ~Spy() noexcept(std::is_nothrow_destructible_v<T>) {}
 
@@ -118,11 +123,9 @@ public:
   }
 
 private:
+  LogInfo logInfo_;
+  
   T value_;
   // Allocator allocator_;
   std::shared_ptr<AbstractLogger> logger_{nullptr};
-
-  bool endOfExpression_ = false;
-  bool expressionLogged_ = false;
-  unsigned int accessCount_ = 0;
 };
