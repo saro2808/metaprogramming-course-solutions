@@ -61,7 +61,9 @@ public:
   explicit Spy(T& value /* , const Allocator& alloc = Allocator()*/ )
     : value_(T(value)) {}
 
-  explicit Spy(T&& value) : value_(std::move(value)) {}
+  explicit Spy(T&& value) noexcept
+    requires std::movable<T>
+    : value_(std::move(value)) {}
 
   T& operator *() { return value_; }
   const T& operator *() const { return value_; }
@@ -76,36 +78,43 @@ public:
         &accessCount_, &endOfExpression_, &expressionLogged_);
   }
 
-  /*
-   * if needed (see task readme):
-   *   default constructor
-   *   copy and move construction
-   *   copy and move assignment
-   *   equality operators
-   *   destructor
-  */
-
   Spy() = default;
   Spy(const Spy&) = default;
-  Spy(Spy&&) = default;
   
-  Spy& operator=(const Spy& other) {
+  Spy(Spy&&) noexcept
+    requires std::movable<T> = default;
+  
+  Spy& operator=(const Spy& other)
+    requires std::assignable_from<T&, T> {
     value_ = other.value_;
-    logger_ = other.logger_/*std::make_shared(*other.logger_)*/;
-    endOfExpression_ = false/*other.endOfExpression_*/;
-    expressionLogged_ = false/*other.expressionLogged_*/;
-    accessCount_ = 0/*other.accessCount_*/;
+    logger_ = other.logger_;
+    endOfExpression_ = false;
+    expressionLogged_ = false;
+    accessCount_ = 0;
     return *this;
   }
   
-  Spy& operator=(Spy&&) = default;
-  ~Spy() noexcept {}
+  Spy& operator=(Spy&&) noexcept
+    requires std::movable<T> = default;
+
+  ~Spy() noexcept(std::is_nothrow_destructible_v<T>) {}
+
+  constexpr bool operator==(const Spy& other) const
+    requires std::equality_comparable<T> {
+    return value_ == other.value_;
+  }
+
+  constexpr bool operator!=(const Spy& other) const
+    requires std::equality_comparable<T> {
+    return value_ != other.value_;
+  }
 
   template <std::invocable<unsigned int> Logger>
-    /* requires  see task readme */
+    requires ((std::copyable<T> && std::copy_constructible<Logger>) ||
+              (!std::copyable<T> && std::movable<T> && std::move_constructible<Logger>) ||
+              std::is_same_v<Logger, void(*)(unsigned int)>)
   void setLogger(Logger&& logger) {
-    logger_ = /*static_pointer_cast<AbstractLogger, LoggerWrapper<Logger>>(*/
-        std::make_shared<LoggerWrapper<Logger>>(std::forward<Logger>(logger))/*)*/;
+    logger_ = std::make_shared<LoggerWrapper<Logger>>(std::forward<Logger>(logger));
   }
 
 private:
