@@ -17,11 +17,11 @@ template <std::invocable<unsigned int> Logger>
 class LoggerWrapper : public AbstractLogger {
 public:
   explicit LoggerWrapper(const Logger& logger)
-    requires std::copyable<Logger> 
+    requires std::copy_constructible<Logger> 
     : logger_(logger) {}
   
   LoggerWrapper(Logger&& logger)
-    requires std::movable<Logger>
+    requires std::move_constructible<Logger>
     : logger_(std::move(logger)) {}
   
   void operator()(unsigned int arg) override {
