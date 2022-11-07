@@ -16,7 +16,7 @@ public:
 template <std::invocable<unsigned int> Logger>
 class LoggerWrapper : public AbstractLogger {
 public:
-  explicit LoggerWrapper(const Logger& logger)
+  LoggerWrapper(const Logger& logger)
     requires std::copy_constructible<Logger> 
     : logger_(logger) {}
   
