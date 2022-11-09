@@ -10,30 +10,42 @@ class AbstractLogger {
 public:
   virtual void operator()(unsigned int) = 0;
   virtual ~AbstractLogger() = default;
-  virtual AbstractLogger* clone(Storage& storage) = 0;
-  virtual AbstractLogger* move_to(Storage& storage, Alloc& alloc) = 0;
+  virtual AbstractLogger* clone(Storage&, std::size_t&) = 0;
+  virtual AbstractLogger* move_to(Storage&, Alloc&) = 0;
   virtual AbstractLogger* allocate(Alloc&) = 0;
+  //virtual void deallocate(AbstractLogger*) = 0;
   virtual void construct(Alloc, AbstractLogger<Alloc>*) = 0;
 };
 
 template <std::invocable<unsigned int> Logger, typename Allocator>
 class LoggerWrapper : public AbstractLogger<Allocator> {
 public:
-  LoggerWrapper(const std::remove_reference_t<Logger>& logger, const Allocator& allocator = Allocator())
-    requires std::copy_constructible<Logger>
+  LoggerWrapper(const Logger& logger, const Allocator& allocator = Allocator())
+    requires (std::is_same_v<std::remove_const_t<std::remove_reference_t<Logger>>&, std::remove_const_t<Logger>&>
+      && std::copy_constructible<Logger>)
     : logger_(logger), allocator_(allocator) {}
   
   LoggerWrapper(Logger&& logger, const Allocator& allocator = Allocator())
-    requires std::movable<Logger>
+    requires (std::is_same_v<std::remove_reference_t<Logger>&&, Logger&&>
+      && std::movable<Logger>)
     : logger_(std::move(logger)), allocator_(allocator) {}
-  
+
+  LoggerWrapper(Logger&& logger, Allocator&& allocator = std::move(Allocator()))
+    requires (std::is_same_v<std::remove_reference_t<Logger>&&, Logger&&>)
+    : logger_(std::move(logger)), allocator_(std::move(allocator)) {}
+
+  LoggerWrapper(const Logger& logger, Allocator&& allocator)
+    requires (std::is_same_v<std::remove_const_t<std::remove_reference_t<Logger>>&, std::remove_const<Logger>&>)
+    : logger_(logger), allocator_(std::move(allocator)) {}
+
   void operator()(unsigned int arg) override {
     logger_(arg);
   }
 
-  AbstractLogger<Allocator>* clone(Storage& storage) override;
+  AbstractLogger<Allocator>* clone(Storage& storage, std::size_t&) override;
   LoggerWrapper* move_to(Storage& storage, Allocator&) override; 
   AbstractLogger<Allocator>* allocate(Allocator&) override;
+  //void deallocate(AbstractLogger<Allocator>*) override;
   void construct(Allocator, AbstractLogger<Allocator>*) override;
 
   ~LoggerWrapper() override = default;
@@ -50,8 +62,9 @@ struct Storage {
 };
 
 template <std::invocable<unsigned int> Logger, typename Allocator>
-AbstractLogger<Allocator>* LoggerWrapper<Logger, Allocator>::clone(Storage& storage) {
+AbstractLogger<Allocator>* LoggerWrapper<Logger, Allocator>::clone(Storage& storage, std::size_t& loggerSize) {
   if constexpr (std::copyable<Logger>) {
+    loggerSize = sizeof(LoggerWrapper<Logger, Allocator>);
     if constexpr (sizeof(*this) <= sizeof(storage)) {
       std::allocator_traits<Allocator>::construct(allocator_, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage)), logger_, allocator_);
       return reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage));
@@ -66,7 +79,7 @@ AbstractLogger<Allocator>* LoggerWrapper<Logger, Allocator>::clone(Storage& stor
 template <std::invocable<unsigned int> Logger, typename Allocator>
 LoggerWrapper<Logger, Allocator>* LoggerWrapper<Logger, Allocator>::move_to(Storage& storage, Allocator& alloc) {
   if constexpr (std::movable<Logger> && sizeof(*this) <= sizeof(storage)) {
-    std::allocator_traits<Allocator>::construct(alloc, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage)), std::move(logger_), alloc);
+    std::allocator_traits<Allocator>::construct(alloc, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage)), std::move(logger_), std::move(alloc));
     return reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage));
   }
   return nullptr;
@@ -74,10 +87,10 @@ LoggerWrapper<Logger, Allocator>* LoggerWrapper<Logger, Allocator>::move_to(Stor
 
 template <std::invocable<unsigned int> Logger, typename Allocator>
 void LoggerWrapper<Logger, Allocator>::construct(Allocator alloc, AbstractLogger<Allocator>* destination) {
-  std::allocator_traits<Allocator>::template construct<LoggerWrapper<Logger, Allocator>, std::remove_reference_t<Logger>&&, Allocator&&>(
+  std::allocator_traits<Allocator>::template construct<LoggerWrapper<Logger, Allocator>, Logger, Allocator&&>(
       alloc,
       reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(destination),
-      std::move(logger_),
+      std::forward<Logger>(logger_),
       std::move(alloc));
 }
 
@@ -85,6 +98,11 @@ template <std::invocable<unsigned int> Logger, typename Allocator>
 AbstractLogger<Allocator>* LoggerWrapper<Logger, Allocator>::allocate(Allocator& alloc) {
   return reinterpret_cast<AbstractLogger<Allocator>*>(alloc.allocate(sizeof(LoggerWrapper<Logger, Allocator>)));
 }
+
+/*template <std::invocable<unsigned int> Logger, typename Allocator>
+void LoggerWrapper<Logger, Allocator>::deallocate(AbstractLogger<Allocator>* logger) {
+  allocator_.deallocate(reinterpret_cast<std::byte*>(logger), sizeof(LoggerWrapper<Logger, Allocator>));
+}*/
 
 struct LogInfo {
   inline void null() { accessCount = 0; endOfExpression = false; expressionLogged = false; }
@@ -143,7 +161,7 @@ public:
 
   explicit Spy(T&& value, const Allocator& alloc = Allocator()) noexcept
     requires std::movable<T>
-    : value_(std::move(value)), allocator_(alloc) {}
+    : value_(std::move(value)), allocator_(std::move(alloc)) {}
 
   explicit Spy(const Allocator& alloc)
     : allocator_(alloc) {}
@@ -167,23 +185,27 @@ public:
       allocator_ = other.allocator_;
     }
     if (other.logger_) {
-      logger_ = other.logger_->clone(storage_);
+      /*if (logger_ && logger_ != storage()) {
+        std::allocator_traits<Allocator>::destroy(allocator_, logger_);
+        allocator_.deallocate(reinterpret_cast<std::byte*>(logger_), loggerSize_);
+      }*/
+      logger_ = other.logger_->clone(storage_, loggerSize_);
     }
   }
   
   Spy(Spy&& other) noexcept
     requires std::movable<T>
     : value_(std::move(other.value_)) {
-    logInfo_ = other.logInfo_.exchangeWithNull();
-    if constexpr (std::is_same_v<typename Allocator::propagate_on_container_move_assignment, std::true_type>) {
-      allocator_ = std::move(other.allocator_);
-    }
     if (other.logger_ == other.storage()) {
       logger_ = other.logger_->move_to(storage_, other.allocator_);
-      std::allocator_traits<Allocator>::destroy(allocator_, reinterpret_cast<AbstractLogger<Allocator>*>(std::exchange(other.logger_, nullptr)));
+      std::allocator_traits<Allocator>::destroy(other.allocator_, reinterpret_cast<AbstractLogger<Allocator>*>(std::exchange(other.logger_, nullptr)));
     } else if (other.logger_) {
       logger_ = std::exchange(other.logger_, nullptr);
     }
+    if constexpr (std::is_same_v<typename Allocator::propagate_on_container_move_assignment, std::true_type>) {
+      allocator_ = std::move(other.allocator_);
+    }
+    logInfo_ = other.logInfo_.exchangeWithNull();
     other.logInfo_.null();
   }
   
@@ -196,7 +218,13 @@ public:
       allocator_ = other.allocator_;
     }
     if (other.logger_) {
-      logger_ = other.logger_->clone(storage_);
+      if (logger_ == storage()) {
+        std::allocator_traits<Allocator>::destroy(allocator_, logger_);
+      } else if (logger_) {
+        std::allocator_traits<Allocator>::destroy(allocator_, logger_);
+        allocator_.deallocate(reinterpret_cast<std::byte*>(logger_), loggerSize_);
+      }
+      logger_ = other.logger_->clone(storage_, loggerSize_);
     } else {
       logger_ = nullptr;
     }
@@ -212,14 +240,15 @@ public:
     }
     if constexpr (!std::is_same_v<typename Allocator::propagate_on_container_move_assignment, std::true_type>) {
       if (allocator_ != other.allocator_) {
-        allocator_ = std::move(other.allocator_);
         if (other.logger_) {
           if (other.logger_ != other.storage()) {
             logger_ = other.logger_->allocate(allocator_);
             other.logger_->construct(allocator_, logger_);
             std::allocator_traits<Allocator>::destroy(other.allocator_, other.logger_);
-            other.allocator_.deallocate(reinterpret_cast<std::byte*>(other.logger_), sizeof(AbstractLogger<Allocator>));
+            //logger_->deallocate(other.logger_);
+            other.allocator_.deallocate(reinterpret_cast<std::byte*>(other.logger_), other.loggerSize_);
             other.logger_ = nullptr;
+            allocator_ = std::move(other.allocator_);
           } else {
             logger_ = other.logger_->move_to(storage_, allocator_);
             std::allocator_traits<Allocator>::destroy(other.allocator_, reinterpret_cast<AbstractLogger<Allocator>*>(std::exchange(other.logger_, nullptr)));
@@ -246,7 +275,7 @@ public:
       std::allocator_traits<Allocator>::destroy(allocator_, static_cast<AbstractLogger<Allocator>*>(logger_));
     } else if (logger_) {
       std::allocator_traits<Allocator>::destroy(allocator_, static_cast<AbstractLogger<Allocator>*>(logger_));
-      allocator_.deallocate(reinterpret_cast<std::byte*>(logger_), sizeof(AbstractLogger<Allocator>));
+      allocator_.deallocate(reinterpret_cast<std::byte*>(logger_), loggerSize_);
     }
   }
 
@@ -265,6 +294,7 @@ public:
               (!std::copyable<T> && std::movable<T> && std::move_constructible<Logger>) ||
               std::is_same_v<Logger, void(*)(unsigned int)>)
   void setLogger(Logger&& logger) {
+    loggerSize_ = sizeof(LoggerWrapper<Logger, Allocator>);
     if constexpr (sizeof(LoggerWrapper<Logger, Allocator>) <= storageSize) {
       std::allocator_traits<Allocator>::construct(allocator_, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(storage()), std::forward<Logger>(logger), allocator_);
       logger_ = reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(storage());
@@ -276,6 +306,7 @@ public:
 
 private:
   LogInfo logInfo_;
+  std::size_t loggerSize_{0};
   Storage storage_;
   void* storage() { return std::addressof(storage_); }
   
