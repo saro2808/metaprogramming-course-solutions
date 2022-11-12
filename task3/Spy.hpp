@@ -15,7 +15,7 @@ public:
   virtual AbstractLogger* clone(Storage&, std::size_t&) = 0;
   virtual AbstractLogger* move(Storage&, Alloc&) = 0;
   virtual AbstractLogger* allocate(Alloc&) = 0;
-  virtual void construct(Alloc, AbstractLogger<Alloc>*) = 0;
+  virtual void construct(Alloc&, AbstractLogger<Alloc>*) = 0;
 };
 
 // Implementation of callables
@@ -25,23 +25,13 @@ public:
   using AllocTraits = std::allocator_traits<Allocator>;
 
   LoggerWrapper(const Logger& logger, const Allocator& allocator = Allocator())
-    requires (std::is_same_v<std::remove_const_t<std::remove_reference_t<Logger>>&, std::remove_const_t<Logger>&>
-      && std::copy_constructible<Logger>)
+    requires std::copy_constructible<Logger>
     : logger_(logger), allocator_(allocator) {}
   
   LoggerWrapper(Logger&& logger, const Allocator& allocator = Allocator())
-    requires (std::is_same_v<std::remove_reference_t<Logger>&&, Logger&&>
-      && std::movable<Logger>)
+    requires std::movable<Logger>
     : logger_(std::move(logger)), allocator_(allocator) {}
-
-  LoggerWrapper(Logger&& logger, Allocator&& allocator = std::move(Allocator()))
-    requires (std::is_same_v<std::remove_reference_t<Logger>&&, Logger&&>)
-    : logger_(std::move(logger)), allocator_(std::move(allocator)) {}
-
-  LoggerWrapper(const Logger& logger, Allocator&& allocator)
-    requires (std::is_same_v<std::remove_const_t<std::remove_reference_t<Logger>>&, std::remove_const<Logger>&>)
-    : logger_(logger), allocator_(std::move(allocator)) {}
-
+  
   void operator()(unsigned int arg) override {
     logger_(arg);
   }
@@ -49,7 +39,7 @@ public:
   AbstractLogger<Allocator>* clone(Storage& storage, std::size_t&) override;
   LoggerWrapper* move(Storage& storage, Allocator&) override; 
   AbstractLogger<Allocator>* allocate(Allocator&) override;
-  void construct(Allocator, AbstractLogger<Allocator>*) override;
+  void construct(Allocator&, AbstractLogger<Allocator>*) override;
 
   ~LoggerWrapper() override = default;
 
@@ -81,16 +71,15 @@ template <std::invocable<unsigned int> Logger, typename Allocator>
 LoggerWrapper<Logger, Allocator>* LoggerWrapper<Logger, Allocator>::move(Storage& storage, Allocator& alloc) {
   if constexpr (std::movable<Logger> && sizeof(*this) <= sizeof(storage)) {
     auto movedTo = reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(std::addressof(storage));
-    AllocTraits::construct(alloc, movedTo, std::move(logger_), std::move(alloc));
+    AllocTraits::construct(alloc, movedTo, std::move(logger_), alloc);
     return movedTo;
   }
   return nullptr;
 }
 
 template <std::invocable<unsigned int> Logger, typename Allocator>
-void LoggerWrapper<Logger, Allocator>::construct(Allocator alloc, AbstractLogger<Allocator>* destination) {
-  AllocTraits::template construct<LoggerWrapper<Logger, Allocator>, Logger, Allocator&&>(alloc,
-      reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(destination), std::forward<Logger>(logger_), std::move(alloc));
+void LoggerWrapper<Logger, Allocator>::construct(Allocator& alloc, AbstractLogger<Allocator>* destination) {
+  AllocTraits::construct(alloc, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(destination), std::forward<Logger>(logger_), alloc);
 }
 
 template <std::invocable<unsigned int> Logger, typename Allocator>
@@ -106,21 +95,6 @@ struct LogInfo {
   bool endOfExpression = false;
   bool expressionLogged = false;
 };
-
-// Substitute for the non-existent flag in allocators
-template<typename Alloc>
-struct propagate_on_copy_assignment {
-  static constexpr bool Value = false;
-};
-
-template<typename Alloc>
-  requires requires { typename Alloc::propagate_on_container_copy_assignment; }
-struct propagate_on_copy_assignment<Alloc> {
-  static constexpr bool Value = std::is_same_v<typename Alloc::propagate_on_container_copy_assignment, std::true_type>; 
-};
-
-template<typename Alloc>
-constexpr bool propagate_on_copy_assignment_v = propagate_on_copy_assignment<Alloc>::Value;
 
 // Artificial wrapper for the temporary objects to help recognize their destruction moment
 template <class T, typename Allocator>
@@ -156,14 +130,14 @@ class Spy {
 public:
   using AllocTraits = std::allocator_traits<Allocator>;
   
-  explicit Spy(T& value, const Allocator& alloc = Allocator())
+  explicit Spy(T& value, const Allocator& alloc = Allocator()) noexcept
     : value_(T(value)), allocator_(alloc) {}
 
   explicit Spy(T&& value, const Allocator& alloc = Allocator()) noexcept
     requires std::movable<T>
-    : value_(std::move(value)), allocator_(std::move(alloc)) {}
+    : value_(std::move(value)), allocator_(alloc) {}
 
-  explicit Spy(const Allocator& alloc)
+  explicit Spy(const Allocator& alloc) noexcept
     : allocator_(alloc) {}
 
   T& operator *() { return value_; }
@@ -181,8 +155,9 @@ public:
   Spy(const Spy& other)
     requires std::copyable<T>
     : value_(other.value_) {
-    if constexpr (propagate_on_copy_assignment_v<Allocator>) {
-      allocator_ = other.allocator_;
+    if constexpr (requires { Allocator::propagate_on_container_copy_assignment; }) {
+      if constexpr (Allocator::propagate_on_container_copy_assignment)
+        allocator_ = other.allocator_;
     }
     logger_ = other.logger_->clone(storage_, loggerSize_);
   }
@@ -200,7 +175,6 @@ public:
       allocator_ = std::move(other.allocator_);
     }
     logInfo_ = other.logInfo_.exchangeWithNull();
-    other.logInfo_.null();
   }
   
   Spy& operator=(const Spy& other)
@@ -209,8 +183,9 @@ public:
       return *this;
     }
     cleanLogger();
-    if constexpr (propagate_on_copy_assignment_v<Allocator>) {
-      allocator_ = other.allocator_;
+    if constexpr (requires { Allocator::propagate_on_container_copy_assignment; }) {
+      if constexpr (Allocator::propagate_on_container_copy_assignment)
+        allocator_ = other.allocator_;
     }
     logger_ = other.logger_ ? other.logger_->clone(storage_, loggerSize_) : nullptr;
     value_ = other.value_;
@@ -259,7 +234,7 @@ public:
 
   constexpr bool operator!=(const Spy& other) const
     requires std::equality_comparable<T> {
-    return value_ != other.value_;
+    return !(*this == other);
   }
 
   template <std::invocable<unsigned int> Logger>
