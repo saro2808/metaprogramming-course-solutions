@@ -10,11 +10,11 @@ struct FixedString {
 	
 	constexpr FixedString(const char* string, size_t length)
 		: len(max_length >= length ? length : max_length)
-  {
+	{
 		for (size_t i = 0; i < len; ++i)
-      str[i] = string[i];
-    for (size_t i = len; i < max_length; ++i)
-      str[i] = 0;
+			str[i] = string[i];
+		for (size_t i = len; i < max_length; ++i)
+			str[i] = 0;
 	}
 	
 	constexpr ~FixedString() = default;
