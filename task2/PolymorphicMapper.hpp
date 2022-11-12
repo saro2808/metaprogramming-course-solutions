@@ -27,8 +27,8 @@ template <class Base, class Target, TypeList TL>
 struct PolymorphicMapper {
 	static std::optional<Target> map(const Base* object) {
 		return dynamic_cast<const typename TL::Head::Class*>(object) ?
-           TL::Head::value() :
-           PolymorphicMapper<Base, Target, typename TL::Tail>::map(object);
+			TL::Head::value() :
+			PolymorphicMapper<Base, Target, typename TL::Tail>::map(object);
 	}
 };
 
@@ -42,10 +42,10 @@ struct PolymorphicMapper<Base, Target, E> {
 } //namespace detail
 
 template <class Base, class Target, class... Mappings>
-  requires (CorrectMapping<Base, Target, Mappings> && ...)
+	requires (CorrectMapping<Base, Target, Mappings> && ...)
 struct PolymorphicMapper {
-  static std::optional<Target> map(const Base& object) {
-    return detail::PolymorphicMapper<Base, Target, TopSort<VaArgsToTypeList<Mappings...>>>::map(&object);
-  }
+	static std::optional<Target> map(const Base& object) {
+		return detail::PolymorphicMapper<Base, Target, TopSort<VaArgsToTypeList<Mappings...>>>::map(&object);
+	}
 };
 
