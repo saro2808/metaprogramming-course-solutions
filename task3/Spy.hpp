@@ -36,10 +36,16 @@ public:
     logger_(arg);
   }
 
-  AbstractLogger<Allocator>* clone(Storage& storage, std::size_t&) override;
-  LoggerWrapper* move(Storage& storage, Allocator&) override; 
-  AbstractLogger<Allocator>* allocate(Allocator&) override;
-  void construct(Allocator&, AbstractLogger<Allocator>*) override;
+  AbstractLogger<Allocator>* clone(Storage&, std::size_t&) override;
+  LoggerWrapper* move(Storage&, Allocator&) override; 
+  
+  AbstractLogger<Allocator>* allocate(Allocator& alloc) override {
+    return reinterpret_cast<AbstractLogger<Allocator>*>(alloc.allocate(sizeof(LoggerWrapper<Logger, Allocator>)));
+  }
+  
+  void construct(Allocator& alloc, AbstractLogger<Allocator>* destination) override {
+    AllocTraits::construct(alloc, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(destination), std::forward<Logger>(logger_), alloc);
+  }
 
   ~LoggerWrapper() override = default;
 
@@ -48,7 +54,7 @@ private:
   Allocator allocator_;
 };
 
-constexpr size_t storageSize = sizeof(LoggerWrapper<void(*)(unsigned int), std::allocator<std::byte>>);
+constexpr std::size_t storageSize = sizeof(LoggerWrapper<void(*)(unsigned int), std::allocator<std::byte>>);
 
 struct Storage {
   alignas(16) unsigned char data[storageSize];
@@ -75,16 +81,6 @@ LoggerWrapper<Logger, Allocator>* LoggerWrapper<Logger, Allocator>::move(Storage
     return movedTo;
   }
   return nullptr;
-}
-
-template <std::invocable<unsigned int> Logger, typename Allocator>
-void LoggerWrapper<Logger, Allocator>::construct(Allocator& alloc, AbstractLogger<Allocator>* destination) {
-  AllocTraits::construct(alloc, reinterpret_cast<LoggerWrapper<Logger, Allocator>*>(destination), std::forward<Logger>(logger_), alloc);
-}
-
-template <std::invocable<unsigned int> Logger, typename Allocator>
-AbstractLogger<Allocator>* LoggerWrapper<Logger, Allocator>::allocate(Allocator& alloc) {
-  return reinterpret_cast<AbstractLogger<Allocator>*>(alloc.allocate(sizeof(LoggerWrapper<Logger, Allocator>)));
 }
 
 // Log-related data
