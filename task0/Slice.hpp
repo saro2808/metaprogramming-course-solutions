@@ -143,9 +143,9 @@ public:
     iterator operator+(size_type rhs) const { return iterator(ptr_ + rhs * stride_(), slc_); }
     iterator operator-(size_type rhs) const { return iterator(ptr_ - rhs * stride_(), slc_); }
     
-    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n * stride_(), j.slc_); }
-    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n * stride_(), j.slc_); }
-    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n * stride_(), j.slc_); }
+    friend iterator operator+(const iterator j, const difference_type n) { return iterator(j.ptr_ + n * j.stride_(), j.slc_); }
+    friend iterator operator+(const difference_type n, const iterator j) { return iterator(j.ptr_ + n * j.stride_(), j.slc_); }
+    friend iterator operator-(const iterator j, const difference_type n) { return iterator(j.ptr_ - n * j.stride_(), j.slc_); }
     difference_type operator-(const iterator& that) const { return this->ptr_ - that.ptr_; }
     
     iterator& operator+=(const difference_type n) { return iterator(ptr_ += n * stride_(), slc_); }
@@ -222,29 +222,25 @@ public:
 
   constexpr reference operator[](size_type i) const noexcept { return *(this->data_ + i * stride_()); }
   
-  bool operator==(const Slice<T, extent, stride>& that) const {
-    auto a = begin();
-    auto b = that.begin();
-    while (*a == *b && a != end() && b != that.end()) { ++a; ++b; }
-    if (a != end() || b != that.end())
+  template<class newT, std::size_t newExtent, std::ptrdiff_t newStride>
+  bool operator==(const Slice<newT, newExtent, newStride>& rhs) const {
+    auto a = this->begin();
+    auto b = rhs.begin();
+    while (*a == *b && a != this->end() && b != rhs.end()) { ++a; ++b; }
+    if (a != this->end() || b != rhs.end())
       return false;
     return true;
   }
   
-  bool operator!=(const Slice<T, extent, stride>& that) const { return !(*this == that); }
+  bool operator!=(const Slice& rhs) const { return !(*this == rhs); }
   
   template<class newT, std::size_t newExtent, std::ptrdiff_t newStride>
     requires (std::is_same_v<newT, T> || std::is_same_v<newT, const T>)
   operator Slice<newT, newExtent, newStride>() const {
-    return Slice<newT, newExtent, newStride>(data_, extent_(), stride_());
+    return {data_, extent_(), stride_()};
   }
 
 private:
-  Slice(T* dt, ExtentStorage<extent> extnt, StrideStorage<stride> strd) {
-    if constexpr (extent != std::dynamic_extent) { extent_() = extnt(); }
-    if constexpr (stride != dynamic_stride)      { stride_() = strd(); }
-  }
-  
   size_type extentSkipped_(const difference_type skip) const {
     return (skip - 1 + extent_()) / skip;
   }
