@@ -84,12 +84,8 @@ public:
 
   template<typename Type, size_t Size>
   constexpr Slice(std::array<Type, Size>& array) {
-    if constexpr (stride == dynamic_stride) {
-      stride_() = 1;
-    }
-    if constexpr (extent == std::dynamic_extent) {
-      extent_() = array.size() / stride_();
-    }
+    if constexpr (stride == dynamic_stride)      stride_() = 1;
+    if constexpr (extent == std::dynamic_extent) extent_() = array.size() / stride_();
     data_ = array.data();
   }
 
@@ -101,21 +97,16 @@ public:
       extent == std::dynamic_extent &&
       requires { container.size(); container.data(); }
     ) {
-    if constexpr (stride == dynamic_stride) {
-      stride_() = 1;
-    }
+    if constexpr (stride == dynamic_stride) { stride_() = 1; }
     extent_() = container.size() / stride_();
     data_ = container.data();
   }
 
   template <std::contiguous_iterator It>
-  Slice(It first, std::size_t count, std::ptrdiff_t skip) : data_(&*first) {
-    if constexpr (stride == dynamic_stride) {
-      stride_() = skip;
-    } // else assert(stride_() == skip);
-    if constexpr (extent == std::dynamic_extent) {
-      extent_() = count;
-    }
+  Slice(It first, std::size_t count, std::ptrdiff_t skip)
+  : data_(&*first) {
+    if constexpr (stride == dynamic_stride)      stride_() = skip;
+    if constexpr (extent == std::dynamic_extent) extent_() = count;
   }
 
   ~Slice() noexcept = default;
@@ -146,9 +137,9 @@ public:
     reference operator[](const difference_type i) const { return iterator(ptr_ + i * stride_(), slc_); }
     
     iterator& operator++() { ptr_ += stride_(); return *this; }
-    iterator operator++(int) { iterator it = *this; (*this) += stride_(); return it; }
+    iterator operator++(int) { iterator it = *this; *this += stride_(); return it; }
     iterator& operator--() { ptr_ -= stride_(); return *this; }
-    iterator operator--(int) { iterator it = *this; (*this) -= stride_(); return it; }
+    iterator operator--(int) { iterator it = *this; *this -= stride_(); return it; }
     iterator operator+(size_type rhs) const { return iterator(ptr_ + rhs * stride_(), slc_); }
     iterator operator-(size_type rhs) const { return iterator(ptr_ - rhs * stride_(), slc_); }
     
