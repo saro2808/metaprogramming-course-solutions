@@ -248,43 +248,35 @@ struct Zip2<L, R> : Nil {};
 // Zip
 namespace detail {
 
-template< TypeList L, TypeList R >
-struct Zip2Helper {
-    using Head = Cons<typename L::Head, typename R::Head>;
-    using Tail = Zip2Helper<typename L::Tail, typename R::Tail>;
+template<TypeSequence TL>
+using Head = typename TL::Head;
+
+template<TypeSequence TL>
+using Tail = typename TL::Tail;
+
+// TLL stands for TypeLists' list
+template<TypeList TLL>
+struct ZipHelper {
+    using Head = TTuple<Map<Head, TLL>>;
+    using Tail = ZipHelper<Map<Tail, TLL>>;
 };
 
-template< TypeList L, TypeList R >
-    requires (Empty<L> || Empty<R>)
-struct Zip2Helper<L, R> : Nil {};
+template<Empty E>
+struct ZipHelper<E> : Nil {};
 
-template< TypeList... TLs >
-struct ZipHelper : Nil {};
+template<class... Ts>
+struct ToTypeList : Nil {};
 
-template< TypeSequence TL, TypeList... TLs >
-struct ZipHelper<TL, TLs...> {
-	using Answer = Zip2Helper<TL, ZipHelper<TLs...>>;
-	using Head = typename Answer::Head;
-	using Tail = typename Answer::Tail;
-};
-
-template< TypeSequence TL >
-	requires requires { !TypeTuple<typename TL::Head>; }
-struct ZipHelper<TL> {
-	using Head = Cons<typename TL::Head, Nil>;
-	using Tail = ZipHelper<typename TL::Tail>;
-};
-
-template< TypeSequence TL >
-struct ZipHelper<TL> {
-    using Head = typename TL::Head;
-    using Tail = ZipHelper<typename TL::Tail>;
+template<class T, class... Ts>
+struct ToTypeList<T, Ts...> {
+    using Head = T;
+    using Tail = ToTypeList<Ts...>;
 };
 
 } // namespace detail
 
-template< TypeList... TLs >
-using Zip = Map<ToTuple, detail::ZipHelper<TLs...>>;
+template<TypeList... TLs>
+using Zip = detail::ZipHelper<detail::ToTypeList<TLs...>>;
 
 // GroupBy
 template< template<class, class> class EQ, TypeList TL >
