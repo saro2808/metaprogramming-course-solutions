@@ -16,27 +16,45 @@ struct EnumeratorTraits {
     using UnderlyingType = std::underlying_type_t<Enum>;
     
     static constexpr std::size_t size() noexcept {
-        constexpr auto high = min( static_cast<std::size_t>(std::numeric_limits<UnderlyingType>::max()), MAXN);
-        constexpr auto low  = min(-static_cast<std::size_t>(std::numeric_limits<UnderlyingType>::min()), MAXN);
-        constexpr auto highHalved = high / 2;
-        constexpr auto lowHalved  = low  / 2;
-        
-        std::size_t zeroIsValid = isValid_<(Enum)0>();
-        std::size_t sz = zeroIsValid;
-        if constexpr (highHalved != 0) sz += size_< 1, 1>(std::make_index_sequence<highHalved>{});
-        if constexpr (lowHalved  != 0) sz += size_<-1, 1>(std::make_index_sequence< lowHalved>{});
-        if constexpr (high != 0) sz += size_< 1, highHalved + 1>(std::make_index_sequence<high - highHalved>{});
-        if constexpr (low  != 0) sz += size_<-1,  lowHalved + 1>(std::make_index_sequence< low -  lowHalved>{});
-        return sz;
+        constexpr auto positives = signedSize_<1, high_()>();
+        constexpr auto negatives = signedSize_<-1, low_()>();
+        return isValid_<(Enum)0>() + positives.first + positives.second
+                                   + negatives.first + negatives.second;
     }
-//    static constexpr Enum at(std::size_t i) noexcept;
+    /*
+    static constexpr Enum at(std::size_t i) noexcept {
+        constexpr auto negativesSize = signedSize_<-1, low_()>();
+        constexpr auto positivesSize = signedSize_<1, high_()>();
+        constexpr auto zeroIsValid = isValid_<(Enum)0>();
+        if constexpr (i < negativesSize)
+    }*/
+
 //    static constexpr std::string_view nameAt(std::size_t i) noexcept;
 
 private:
-    template <char sign, std::size_t offset, std::size_t... ints>
+    static constexpr std::size_t high_() {
+        return min( static_cast<std::size_t>(std::numeric_limits<UnderlyingType>::max()), MAXN);
+    }
+
+    static constexpr std::size_t low_() {
+        return min(-static_cast<std::size_t>(std::numeric_limits<UnderlyingType>::min()), MAXN);
+    }
+
+    template<signed char sign, std::size_t max>
+    static constexpr auto signedSize_() noexcept {
+        constexpr auto maxHalved = max / 2;
+        constexpr auto sz0 = /*(maxHalved == 0) ? 0 :*/ size_<sign,             1>(std::make_index_sequence<      maxHalved>{});
+        constexpr auto sz1 = /*(max       == 0) ? 0 :*/ size_<sign, maxHalved + 1>(std::make_index_sequence<max - maxHalved>{});
+        return std::make_pair(sz0, sz1);
+    }
+    
+    template <signed char sign, std::size_t offset, std::size_t... ints>
     static constexpr std::size_t size_(std::integer_sequence<std::size_t, ints...>) noexcept {
-        // works fine when compiled with clang without flags only if sizeof...(ints) is no more than 256
-        return (isValid_<(Enum)(sign * (ints + offset))>() + ...);
+        // works fine when compiled with clang without flags only if sizeof...(ints) doesn't exceed 256
+        if constexpr (sizeof...(ints) == 0)
+            return 0;
+        else
+            return (isValid_<(Enum)(sign * (ints + offset))>() + ...);
     }
 
     template <Enum V>
