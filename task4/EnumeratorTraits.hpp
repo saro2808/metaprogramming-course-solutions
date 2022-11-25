@@ -13,85 +13,54 @@ constexpr std::size_t min(std::size_t a, std::size_t b) {
 template <class Enum, std::size_t MAXN = 512>
 	requires std::is_enum_v<Enum>
 struct EnumeratorTraits {
-    using UnderlyingType = std::underlying_type_t<Enum>;
-    
     static constexpr std::size_t size() noexcept {
         constexpr auto positives = signedSize_<1, high_()>();
         constexpr auto negatives = signedSize_<-1, low_()>();
-        return isValid_<(Enum)0>() + positives.first + positives.second
-                                   + negatives.first + negatives.second;
+        return zeroIsValid_() + positives.first + positives.second
+                              + negatives.first + negatives.second;
     }
     
     static constexpr Enum at(const std::size_t i) noexcept {
-        constexpr auto negativesSizes = signedSize_<-1, low_()>();
-        constexpr auto positivesSizes = signedSize_<1, high_()>();
-        constexpr auto negativesSize = negativesSizes.first + negativesSizes.second;
-        constexpr auto positivesSize = positivesSizes.first + positivesSizes.second;
-        constexpr auto zeroIsValid = isValid_<(Enum)0>();
-        
-        if (i < negativesSize) {
-            // loop over negatives
-            if (i < negativesSizes.second)
-                return getValueAt_<-1, low_()/2, low_() - low_()/2>(i);
-            return getValueAt_<-1, 0, low_()/2>(i - negativesSizes.second);
-        }
-        if constexpr (zeroIsValid)
-            if (i == negativesSize)
-                return (Enum)0;
-        // loop over positives
-        if (i < negativesSize + zeroIsValid + positivesSizes.first)
-            return getValueAt_<1, 0, high_()/2>(i - zeroIsValid - negativesSize);
-        return getValueAt_<1, high_()/2, high_() - high_()/2>(i - zeroIsValid - negativesSize - positivesSizes.first);
+        return static_cast<Enum>(nameValueAt_<int>(i));
     }
-/*
-    template<typename ...>
-    struct NameValueInfo {
-        constexpr auto operator() {
-            constexpr auto negativesSizes = signedSize_<-1, low_()>();
-            constexpr auto positivesSizes = signedSize_<1, high_()>();
-            constexpr auto negativesSize = negativesSizes.first + negativesSizes.second;
-            constexpr auto positivesSize = positivesSizes.first + positivesSizes.second;
-            constexpr auto zeroIsValid = isValid_<(Enum)0>();
 
-        if (i < negativesSize) {
-            // loop over negatives
-            if (i < negativesSizes.second)
-                return getValueAt_<-1, low_()/2, low_() - low_()/2>(i);
-            return getValueAt_<-1, 0, low_()/2>(i - negativesSizes.second);
-        }
-        if constexpr (zeroIsValid)
-            if (i == negativesSize)
-                return (Enum)0;
-        // loop over positives
-        if (i < negativesSize + zeroIsValid + positivesSizes.first)
-            return getValueAt_<1, 0, high_()/2>(i - zeroIsValid - negativesSize);
-        return getValueAt_<1, high_()/2, high_() - high_()/2>(i - zeroIsValid - negativesSize - positivesSizes.first);
-        }
-    };
-*/
     static constexpr std::string_view nameAt(const std::size_t i) noexcept {
-        constexpr auto negativesSizes = signedSize_<-1, low_()>();
-        constexpr auto positivesSizes = signedSize_<1, high_()>();
-        constexpr auto negativesSize = negativesSizes.first + negativesSizes.second;
-        constexpr auto positivesSize = positivesSizes.first + positivesSizes.second;
-        constexpr auto zeroIsValid = isValid_<(Enum)0>();
-
-        if (i < negativesSize) {
-            // loop over negatives
-            if (i < negativesSizes.second)
-                return getNameAt_<-1, low_()/2, low_() - low_()/2>(i);
-            return getNameAt_<-1, 0, low_()/2>(i - negativesSizes.second);
-        }
-        if constexpr (zeroIsValid)
-            if (i == negativesSize)
-                return nameOf_<(Enum)0>();
-        // loop over positives
-        if (i < negativesSize + zeroIsValid + positivesSizes.first)
-            return getNameAt_<1, 0, high_()/2>(i - zeroIsValid - negativesSize);
-        return getNameAt_<1, high_()/2, high_() - high_()/2>(i - zeroIsValid - negativesSize - positivesSizes.first);
+        return nameValueAt_<std::string_view>(i);
     }
 
 private:
+    using UnderlyingType = std::underlying_type_t<Enum>;
+    
+    static constexpr char zeroIsValid_() {
+        return isValid_<static_cast<Enum>(0)>();
+    }
+
+    template<typename Ret>
+    static constexpr Ret nameValueAt_(const std::size_t i) noexcept {
+        constexpr auto negativesSizes = signedSize_<-1, low_()>();
+        constexpr auto positivesSizes = signedSize_<1, high_()>();
+        constexpr auto negativesSize = negativesSizes.first + negativesSizes.second;
+        constexpr auto positivesSize = positivesSizes.first + positivesSizes.second;
+        constexpr auto zeroIsValid = zeroIsValid_();
+
+        if (i < negativesSize) {
+            if (i < negativesSizes.second)
+                return getNameValueAt_<-1, low_()/2, negativesSizes.second, low_() - low_()/2, Ret>(i);
+            return getNameValueAt_<-1, 0, negativesSizes.first, low_()/2, Ret>(i - negativesSizes.second);
+        }
+        if constexpr (zeroIsValid) {
+            if (i == negativesSize) {
+                if constexpr (std::is_same_v<Ret, int>)
+                    return 0;
+                else
+                    return nameOf_<static_cast<Enum>(0)>();
+            }
+        }
+        if (i < negativesSize + zeroIsValid + positivesSizes.first)
+            return getNameValueAt_<1, 0, positivesSizes.first, high_()/2, Ret>(i - zeroIsValid - negativesSize);
+        return getNameValueAt_<1, high_()/2, positivesSizes.second, high_() - high_()/2, Ret>(i - zeroIsValid - negativesSize - positivesSizes.first);
+    }
+
     static constexpr std::size_t high_() {
         return min( static_cast<std::size_t>(std::numeric_limits<UnderlyingType>::max()), MAXN);
     }
@@ -114,11 +83,11 @@ private:
         if constexpr (sizeof...(ints) == 0)
             return 0;
         else
-            return (isValid_<(Enum)(sign * (ints + offset))>() + ...);
+            return (isValid_<static_cast<Enum>(sign * (ints + offset))>() + ...);
     }
 
     template <Enum V>
-    static constexpr short isValid_() {
+    static constexpr char isValid_() {
         constexpr const std::string_view name(__PRETTY_FUNCTION__);
         constexpr auto i = name.find("V = ");
         if constexpr (name[i + 4] == '(') {
@@ -139,51 +108,33 @@ private:
         return res;
     }
 
-    template<char sign, int offset, std::size_t max>
-    static constexpr Enum getValueAt_(const std::size_t i) {
-        int res = 0;
+    template<char sign, int offset, int total, std::size_t max, class Ret>
+    static constexpr Ret getNameValueAt_(const std::size_t i) {
+        constexpr bool retIsInt = std::is_same_v<Ret, int>;
+        Ret null;
+        if constexpr (retIsInt) null = 0;
+        else null = std::string_view("");
+        Ret res = null;
         int counter = 0;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (void)((res = [&]() {
-                if constexpr (isValid_<(Enum)(sign*(static_cast<int>(I)+1+offset))>())
+                constexpr auto currentValue = sign*(static_cast<int>(I)+1+offset);
+                if constexpr (isValid_<static_cast<Enum>(currentValue)>())
                     ++counter;
-                if ((int)i - sign * counter == (1-sign)/2*max - (1+sign)/2)
-                    return sign*(static_cast<int>(I)+1+offset);
-                return 0;
-            }(), (int)i - sign * counter != (1-sign)/2*max - (1+sign)/2) && ...);
-        }(std::make_index_sequence<max>{});
-        return (Enum)res;
-    }
-
-    template<char sign, int offset, std::size_t max>
-    static constexpr std::string_view getNameAt_(const std::size_t i) {
-        std::string_view res = "";
-        int counter = 0;
-        [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (void)((res = [&]() {
-                if constexpr (isValid_<(Enum)(sign*(static_cast<int>(I)+1+offset))>())
-                    ++counter;
-                if ((int)i - sign * counter == (1-sign)/2*max - (1+sign)/2)
-                    return nameOf_<(Enum)(sign*(static_cast<int>(I)+1+offset))>();
-                return std::string_view("");
-            }(), (int)i - sign * counter != (1-sign)/2*max - (1+sign)/2) && ...);
+                if (nameValueFound_<sign, total>(i, counter)) {
+                    if constexpr (retIsInt)
+                        return currentValue;
+                    else
+                        return nameOf_<static_cast<Enum>(currentValue)>();
+                }
+                return null;
+            }(), !nameValueFound_<sign, total>(i, counter)) && ...);
         }(std::make_index_sequence<max>{});
         return res;
     }
-
-/*    template<char sign, int offset, std::size_t max>
-    static constexpr std::string_view getNameAt_(const std::size_t i) {
-        std::string_view res = "";
-        int counter = 0;
-        [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (void)((res = [&]() {
-                if constexpr (isValid_<(Enum)(sign*(static_cast<int>(I)+1+offset))>())
-                    ++counter;
-                if ((int)i - sign * counter == (1-sign)/2*max - (1+sign)/2)
-                    return nameOf_<(Enum)(sign*(static_cast<int>(I)+1+offset))>();
-                return std::string_view("");
-            }(), (int)i - sign * counter == (1-sign)/2*max - (1+sign)/2) && ...);
-        }(std::make_index_sequence<max>{});
-        return res;
-    }*/
+    
+    template<char sign, int total>
+    static constexpr bool nameValueFound_(const std::size_t i, const int counter) {
+        return (static_cast<int>(i) - sign * counter == (1-sign)/2*total - (1+sign)/2);
+    }
 };
