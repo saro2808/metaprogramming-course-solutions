@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <utility>
 #include <string_view>
+#include <array>
 #include <limits>
 
 constexpr std::size_t min(std::size_t a, std::size_t b) {
