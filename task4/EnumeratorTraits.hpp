@@ -28,12 +28,13 @@ namespace detail {
     template <class Enum, Enum V>
     static constexpr std::string_view nameOf_() noexcept {
         constexpr const std::string_view name(__PRETTY_FUNCTION__);
-        auto i = name.find("V = ");
-        auto j = name.find(';', i);
-        auto k = (j == std::string_view::npos) ? name.find(']', i) : j;
-        auto res = name.substr(i+4, k-i-4);
-        if ((i = res.find("::")) != std::string_view::npos)
-            res = res.substr(i+2, j-i-2);
+        constexpr auto i = name.find("V = ");
+        constexpr auto j = name.find(';', i);
+        constexpr auto k = (j == std::string_view::npos) ? name.find(']', i) : j;
+        constexpr auto res = name.substr(i+4, k-i-4);
+        constexpr auto l = res.find("::");
+        if constexpr (l != std::string_view::npos)
+            return res.substr(l+2, j-l-2);
         return res;
     }
 
@@ -77,19 +78,18 @@ namespace detail {
                                     + negatives.first + negatives.second;
     }
 
-    template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t sz>
+    template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t end>
     static constexpr void fill(std::array<NameValue<Enum>, size<Enum, MAXN>()>& arr, std::size_t start) noexcept {
         auto i = start;
-        constexpr int summand = max + offset + (sign+1)/2*zeroIsValid_<Enum>() - (sign+1)/2;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            ([&]() {
+            (void)(([&]() {
                 constexpr auto currentValue = static_cast<Enum>(sign*(static_cast<int>(I)+1+offset));
                 if constexpr (isValid_<Enum, currentValue>()) {
                     i += sign;
                     arr[i].first = nameOf_<Enum, currentValue>();
                     arr[i].second = currentValue;
                 }
-            }(), ...);
+            }(), i != end) && ...);
         }(std::make_index_sequence<max>{});
     }
 
@@ -110,10 +110,10 @@ namespace detail {
             nameValueArr[zeroIdx].first = nameOf_<Enum, value>();
             nameValueArr[zeroIdx].second = value;
         }
-        fill<Enum, MAXN, -1,  low/2,  low -  low/2, sz>(nameValueArr, negatives.second);
-        fill<Enum, MAXN, -1, 0,  low/2, sz>(nameValueArr, negativesSize);
-        fill<Enum, MAXN,  1, 0, high/2, sz>(nameValueArr, negativesSize + zeroIsValid - 1);
-        fill<Enum, MAXN,  1, high/2, high - high/2, sz>(nameValueArr, negativesSize + zeroIsValid + positives.first - 1);
+        fill<Enum, MAXN, -1,  low/2,  low -  low/2, 0>(nameValueArr, negatives.second);
+        fill<Enum, MAXN, -1, 0,  low/2, negatives.second>(nameValueArr, negativesSize);
+        fill<Enum, MAXN,  1, 0, high/2, negativesSize + zeroIsValid + positives.first - 1>(nameValueArr, negativesSize + zeroIsValid - 1);
+        fill<Enum, MAXN,  1, high/2, high - high/2, sz - 1>(nameValueArr, negativesSize + zeroIsValid + positives.first - 1);
         return nameValueArr;
     }
 
@@ -140,4 +140,5 @@ private:
 };
 
 //template <class Enum, std::size_t MAXN>
+//    requires std::is_enum_v<Enum>
 //std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> EnumeratorTraits<Enum, MAXN>::nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
