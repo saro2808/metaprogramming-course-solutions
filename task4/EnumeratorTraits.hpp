@@ -79,7 +79,7 @@ namespace detail {
     }
 
     template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t end>
-    static constexpr void fill(std::array<NameValue<Enum>, size<Enum, MAXN>()>& arr, std::size_t start) noexcept {
+    static constexpr void fill(auto& arr, std::size_t start) noexcept {
         auto i = start;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (void)(([&]() {
