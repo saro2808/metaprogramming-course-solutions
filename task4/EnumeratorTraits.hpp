@@ -18,24 +18,46 @@ namespace detail {
 
     template <class Enum, Enum V>
     static constexpr char isValid_() noexcept {
-        constexpr const std::string_view name(__PRETTY_FUNCTION__);
-        constexpr auto i = name.find("V = ");
-        if constexpr (name[i + 4] == '(')
+        constexpr const char* name = __PRETTY_FUNCTION__;
+        std::size_t idx = 0;
+        [&]<std::size_t... I>(std::index_sequence<I...>) {
+            bool found = false;
+            (void)(([&](){
+                if (name[I] == 'V' && name[I+2] == '=') {
+                    found = true;
+                    idx = I + 4;
+                }
+            }(), !found) && ...);
+        }(std::make_index_sequence<200>{});
+        if (name[idx] == '(')
             return 0;
         return 1;
     }
 
     template <class Enum, Enum V>
     static constexpr std::string_view nameOf_() noexcept {
-        constexpr const std::string_view name(__PRETTY_FUNCTION__);
-        constexpr auto i = name.find("V = ");
-        constexpr auto j = name.find(';', i);
-        constexpr auto k = (j == std::string_view::npos) ? name.find(']', i) : j;
-        constexpr auto res = name.substr(i+4, k-i-4);
-        constexpr auto l = res.find("::");
-        if constexpr (l != std::string_view::npos)
-            return res.substr(l+2, j-l-2);
-        return res;
+        constexpr const char* name = __PRETTY_FUNCTION__;
+        bool startFound = false;
+        bool endLoop = false;
+        std::size_t resStart = 0;
+        std::size_t resLength = 0;
+        [&]<std::size_t... I>(std::index_sequence<I...>) {
+            (void)(([&]() {
+                if (I > 20) {
+                if (!startFound && name[I-4] == 'V' && name[I-3] == ' ' && name[I-2] == '=') {
+                    resStart = I;
+                    startFound = true;
+                }
+                if (startFound && name[I] == ':' && name[I+1] == ':') {
+                    resStart = I + 2;
+                }
+                if (startFound && (name[I] == ' ' || name[I] == ';' || name[I] == ']' || name[I] == '\0')) {
+                    resLength = I - resStart;
+                    endLoop = true;
+                }}
+            }(), !endLoop) && ...);
+        }(std::make_index_sequence<200>{});
+        return std::string_view(name + resStart, resLength);
     }
 
     template <class Enum>
@@ -79,7 +101,7 @@ namespace detail {
     }
 
     template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t end>
-    static constexpr void fill(std::array<NameValue<Enum>, size<Enum, MAXN>()>& arr, std::size_t start) noexcept {
+    static constexpr void fill(auto& arr, std::size_t start) noexcept {
         auto i = start;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (void)(([&]() {
@@ -136,9 +158,11 @@ struct EnumeratorTraits {
 
 private:
     static constexpr std::size_t size_ = detail::size<Enum, MAXN>();
-    static constexpr auto /*std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_>*/ nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
+    //static std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> nameValueArr_;
+    static constexpr auto nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
 };
-
-//template <class Enum, std::size_t MAXN>
-//    requires std::is_enum_v<Enum>
-//std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> EnumeratorTraits<Enum, MAXN>::nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
+/*
+template <class Enum, std::size_t MAXN>
+    requires std::is_enum_v<Enum>
+std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> EnumeratorTraits<Enum, MAXN>::nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
+*/
