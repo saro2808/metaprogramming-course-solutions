@@ -93,11 +93,14 @@ namespace detail {
     }
 
     template <class Enum, std::size_t MAXN>
+    constexpr auto positiveSize = signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
+    template <class Enum, std::size_t MAXN>
+    constexpr auto negativeSize = signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
+
+    template <class Enum, std::size_t MAXN>
     static constexpr std::size_t size() noexcept {
-        constexpr auto positives = signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
-        constexpr auto negatives = signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
-        return zeroIsValid_<Enum>() + positives.first + positives.second
-                                    + negatives.first + negatives.second;
+        return zeroIsValid_<Enum>() + positiveSize<Enum, MAXN>.first + positiveSize<Enum, MAXN>.second
+                                    + negativeSize<Enum, MAXN>.first + negativeSize<Enum, MAXN>.second;
     }
 
     template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t end>
@@ -117,8 +120,8 @@ namespace detail {
 
     template<class Enum, std::size_t MAXN>
     static constexpr auto nameValueArr() noexcept {
-        constexpr auto positives = signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
-        constexpr auto negatives = signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
+        constexpr auto positives = positiveSize<Enum, MAXN>;//signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
+        constexpr auto negatives = negativeSize<Enum, MAXN>;//signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
         constexpr auto negativesSize = negatives.first + negatives.second;
         constexpr auto zeroIsValid = zeroIsValid_<Enum>();
         constexpr auto sz = negativesSize + zeroIsValid + positives.first + positives.second;
@@ -126,8 +129,8 @@ namespace detail {
         constexpr auto  low =  low_<Enum, MAXN>();
         constexpr auto high = high_<Enum, MAXN>();
         if constexpr (zeroIsValid) {
-            auto negativesSizes = signedSize_<Enum, MAXN, -1, low>();
-            auto zeroIdx = negativesSizes.first + negativesSizes.second;
+            //auto negativesSizes = signedSize_<Enum, MAXN, -1, low>();
+            auto zeroIdx = negativesSize;//negativesSizes.first + negativesSizes.second;
             constexpr auto value = static_cast<Enum>(0);
             nameValueArr[zeroIdx].first = nameOf_<Enum, value>();
             nameValueArr[zeroIdx].second = value;
