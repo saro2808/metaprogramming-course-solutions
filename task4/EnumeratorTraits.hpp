@@ -28,7 +28,7 @@ namespace detail {
                     idx = I + 4;
                 }
             }(), !found) && ...);
-        }(std::make_index_sequence<200>{});
+        }(std::make_index_sequence<100>{});
         if (name[idx] == '(')
             return 0;
         return 1;
@@ -56,7 +56,7 @@ namespace detail {
                     endLoop = true;
                 }}
             }(), !endLoop) && ...);
-        }(std::make_index_sequence<200>{});
+        }(std::make_index_sequence<100>{});
         return std::string_view(name + resStart, resLength);
     }
 
