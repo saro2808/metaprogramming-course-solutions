@@ -17,52 +17,39 @@ namespace detail {
     }
 
     template <class Enum, Enum V>
-    static constexpr char isValid_() noexcept {
-        constexpr const char* name = __PRETTY_FUNCTION__;
-        std::size_t idx = 0;
-        [&]<std::size_t... I>(std::index_sequence<I...>) {
-            bool found = false;
-            (void)(([&](){
-                if (name[I] == 'V' && name[I+2] == '=') {
-                    found = true;
-                    idx = I + 4;
-                }
-            }(), !found) && ...);
-        }(std::make_index_sequence<100>{});
-        if (name[idx] == '(')
-            return 0;
-        return 1;
-    }
-
-    template <class Enum, Enum V>
     static constexpr std::string_view nameOf_() noexcept {
         constexpr const char* name = __PRETTY_FUNCTION__;
         bool startFound = false;
         bool endLoop = false;
+        bool notValid = false;
         std::size_t resStart = 0;
         std::size_t resLength = 0;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
             (void)(([&]() {
                 if (I > 20) {
-                if (!startFound && name[I-4] == 'V' && name[I-3] == ' ' && name[I-2] == '=') {
-                    resStart = I;
-                    startFound = true;
+                    if (!startFound && name[I-4] == 'V' && name[I-3] == ' ' && name[I-2] == '=') {
+                        resStart = I;
+                        if (name[I] == '(') {
+                            notValid = true;
+                        } else {
+                            startFound = true;
+                        }
+                    }
+                    if (startFound && name[I] == ':' && name[I+1] == ':') {
+                        resStart = I + 2;
+                    }
+                    if (startFound && (name[I] == ' ' || name[I] == ';' || name[I] == ']' || name[I] == '\0')) {
+                        resLength = I - resStart;
+                        endLoop = true;
+                    }
                 }
-                if (startFound && name[I] == ':' && name[I+1] == ':') {
-                    resStart = I + 2;
-                }
-                if (startFound && (name[I] == ' ' || name[I] == ';' || name[I] == ']' || name[I] == '\0')) {
-                    resLength = I - resStart;
-                    endLoop = true;
-                }}
-            }(), !endLoop) && ...);
+            }(),
+            !notValid && !endLoop) && ...);
         }(std::make_index_sequence<100>{});
-        return std::string_view(name + resStart, resLength);
-    }
 
-    template <class Enum>
-    static constexpr char zeroIsValid_() noexcept {
-        return isValid_<Enum, static_cast<Enum>(0)>();
+        if (notValid)
+            return std::string_view("");
+        return std::string_view(name + resStart, resLength);
     }
 
     template <class Enum, std::size_t MAXN>
@@ -75,72 +62,62 @@ namespace detail {
         return min(-static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::min()), MAXN);
     }
 
-    template <class Enum, char sign, std::size_t offset, std::size_t... ints>
-    static constexpr std::size_t size_(std::integer_sequence<std::size_t, ints...>) noexcept {
-        // works fine when compiled with clang without flags only if sizeof...(ints) doesn't exceed 256
-        if constexpr (sizeof...(ints) == 0)
-            return 0;
-        else
-            return (isValid_<Enum, static_cast<Enum>(sign * (ints + offset))>() + ...);
-    }
+    template<class Enum, std::size_t MAXN>
+    inline constexpr auto high_v = high_<Enum, MAXN>();
 
-    template<class Enum, std::size_t MAXN, char sign, std::size_t max>
-    static constexpr auto signedSize_() noexcept {
-        constexpr auto maxHalved = max / 2;
-        constexpr auto sz0 = size_<Enum, sign,             1>(std::make_index_sequence<      maxHalved>{});
-        constexpr auto sz1 = size_<Enum, sign, maxHalved + 1>(std::make_index_sequence<max - maxHalved>{});
-        return std::make_pair(sz0, sz1);
-    }
+    template<class Enum, std::size_t MAXN>
+    inline constexpr auto  low_v =  low_<Enum, MAXN>();
 
-    template <class Enum, std::size_t MAXN>
-    constexpr auto positiveSize = signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
-    template <class Enum, std::size_t MAXN>
-    constexpr auto negativeSize = signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
-
-    template <class Enum, std::size_t MAXN>
-    static constexpr std::size_t size() noexcept {
-        return zeroIsValid_<Enum>() + positiveSize<Enum, MAXN>.first + positiveSize<Enum, MAXN>.second
-                                    + negativeSize<Enum, MAXN>.first + negativeSize<Enum, MAXN>.second;
-    }
-
-    template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max, std::size_t end>
-    static constexpr void fill(auto& arr, std::size_t start) noexcept {
-        auto i = start;
+    template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max>
+    static constexpr auto fill(auto& arr, std::size_t start) noexcept {
+        std::size_t i = start;
         [&]<std::size_t... I>(std::index_sequence<I...>) {
-            (void)(([&]() {
+            ([&]() {
                 constexpr auto currentValue = static_cast<Enum>(sign*(static_cast<int>(I)+1+offset));
-                if constexpr (isValid_<Enum, currentValue>()) {
-                    i += sign;
-                    arr[i].first = nameOf_<Enum, currentValue>();
-                    arr[i].second = currentValue;
+                arr[i].first = nameOf_<Enum, currentValue>();
+                if (arr[i].first == std::string_view("")) {
+                    arr[i].second = static_cast<Enum>(MAXN + 1); // invalid enumerator
+                } else {
+                    arr[i++].second = currentValue;
                 }
-            }(), i != end) && ...);
+            }(), ...);
         }(std::make_index_sequence<max>{});
+        return i - start;
     }
 
     template<class Enum, std::size_t MAXN>
     static constexpr auto nameValueArr() noexcept {
-        constexpr auto positives = positiveSize<Enum, MAXN>;//signedSize_<Enum, MAXN, 1, high_<Enum, MAXN>()>();
-        constexpr auto negatives = negativeSize<Enum, MAXN>;//signedSize_<Enum, MAXN, -1, low_<Enum, MAXN>()>();
-        constexpr auto negativesSize = negatives.first + negatives.second;
-        constexpr auto zeroIsValid = zeroIsValid_<Enum>();
-        constexpr auto sz = negativesSize + zeroIsValid + positives.first + positives.second;
-        std::array<NameValue<Enum>, sz> nameValueArr;
-        constexpr auto  low =  low_<Enum, MAXN>();
-        constexpr auto high = high_<Enum, MAXN>();
-        if constexpr (zeroIsValid) {
-            //auto negativesSizes = signedSize_<Enum, MAXN, -1, low>();
-            auto zeroIdx = negativesSize;//negativesSizes.first + negativesSizes.second;
-            constexpr auto value = static_cast<Enum>(0);
-            nameValueArr[zeroIdx].first = nameOf_<Enum, value>();
-            nameValueArr[zeroIdx].second = value;
-        }
-        fill<Enum, MAXN, -1,  low/2,  low -  low/2, 0>(nameValueArr, negatives.second);
-        fill<Enum, MAXN, -1, 0,  low/2, negatives.second>(nameValueArr, negativesSize);
-        fill<Enum, MAXN,  1, 0, high/2, negativesSize + zeroIsValid + positives.first - 1>(nameValueArr, negativesSize + zeroIsValid - 1);
-        fill<Enum, MAXN,  1, high/2, high - high/2, sz - 1>(nameValueArr, negativesSize + zeroIsValid + positives.first - 1);
-        return nameValueArr;
+        constexpr auto  low =  low_v<Enum, MAXN>;
+        constexpr auto high = high_v<Enum, MAXN>;
+
+        constexpr auto zeroValue = static_cast<Enum>(0);
+        constexpr auto zeroNameValue = nameOf_<Enum, zeroValue>();
+        
+        std::array<NameValue<Enum>, high + 1> positiveArr;
+        std::array<NameValue<Enum>,  low + 1> negativeArr;
+        
+        auto smallNegativesSize = fill<Enum, MAXN, -1, 0,  low/2>(negativeArr, 1);
+        auto smallPositivesSize = fill<Enum, MAXN,  1, 0, high/2>(positiveArr, 1);
+        auto NegativesSize = smallNegativesSize + fill<Enum, MAXN, -1,  low/2,  low -  low/2>(negativeArr, 1 + smallNegativesSize);
+        auto PositivesSize = smallPositivesSize + fill<Enum, MAXN,  1, high/2, high - high/2>(positiveArr, 1 + smallPositivesSize);
+        
+        return std::make_pair(
+                std::make_pair(NegativesSize, PositivesSize),
+                std::make_pair(negativeArr, positiveArr)
+        );
     }
+    
+    template<class Enum, std::size_t MAXN>
+    inline constexpr auto enumData = nameValueArr<Enum, MAXN>();
+
+    template<class Enum, std::size_t MAXN>
+    inline constexpr auto sizes = enumData<Enum, MAXN>.first;
+
+    template<class Enum, std::size_t MAXN>
+    inline constexpr auto nameValues = enumData<Enum, MAXN>.second;
+
+    template<class Enum>
+    inline constexpr auto zeroData = std::make_pair(nameOf_<Enum, static_cast<Enum>(0)>(), static_cast<Enum>(0));
 
 } // namespace detail
 
@@ -148,24 +125,57 @@ template <class Enum, std::size_t MAXN = 512>
 	requires std::is_enum_v<Enum>
 struct EnumeratorTraits {
     static constexpr std::size_t size() noexcept {
-        return size_;
+        return negativesSize + positivesSize + zeroIsValid;
     }
 
     static constexpr Enum at(const std::size_t i) noexcept {
-        return nameValueArr_[i].second;
+        if (zeroIsValid) {
+            if (i == negativesSize)
+                return zeroNameValue.second;
+        }
+        if (i < negativesSize)
+            return negativesArr[negativesSize - i].second;
+        return positivesArr[i - negativesSize - zeroIsValid + 1].second;
     }
 
     static constexpr std::string_view nameAt(const std::size_t i) noexcept {
-        return nameValueArr_[i].first;
+        if (zeroIsValid) {
+            if (i == negativesSize)
+                return zeroNameValue.first;
+        }
+        if (i < negativesSize)
+            return negativesArr[negativesSize - i].first;
+        return positivesArr[i - negativesSize - zeroIsValid + 1].first;
     }
 
-private:
-    static constexpr std::size_t size_ = detail::size<Enum, MAXN>();
-    //static std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> nameValueArr_;
-    static constexpr auto nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
-};
+    constexpr static auto negativesSize = detail::sizes<Enum, MAXN>.first;
+    constexpr static auto positivesSize = detail::sizes<Enum, MAXN>.second;
+    constexpr static std::size_t zeroIsValid = (detail::zeroData<Enum>.first == "" ? 0 : 1);
+
+    constexpr static auto negativesArr = detail::nameValues<Enum, MAXN>.first;
+    constexpr static auto positivesArr = detail::nameValues<Enum, MAXN>.second;
+    constexpr static auto zeroNameValue = detail::zeroData<Enum>;
 /*
-template <class Enum, std::size_t MAXN>
-    requires std::is_enum_v<Enum>
-std::array<NameValue<Enum>, EnumeratorTraits<Enum, MAXN>::size_> EnumeratorTraits<Enum, MAXN>::nameValueArr_ = detail::nameValueArr<Enum, MAXN>();
+    static std::size_t negativesSize;
+    static std::size_t positivesSize;
+    static std::size_t zeroIsValid;
+
+    static std::array<NameValue<Enum>, negativesSize> negativesArr;
+    static std::array<NameValue<Enum>, positivesSize> positivesArr;
+    static NameValue<Enum> zeroNameValue;
+*/};
+/*
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+std::size_t EnumeratorTraits<Enum, MAXN>::negativesSize = detail::sizes<Enum, MAXN>.first;
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+std::size_t EnumeratorTraits<Enum, MAXN>::positivesSize = detail::sizes<Enum, MAXN>.second;
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+std::size_t EnumeratorTraits<Enum, MAXN>::zeroIsValid = (detail::zeroData<Enum>.first == "" ? 0 : 1);
+
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+std::array<NameValue<Enum>, negativesSize> EnumeratorTraits<Enum, MAXN>::negativesArr = detail::nameValues<Enum, MAXN>.first;
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+std::array<NameValue<Enum>, positivesSize> EnumeratorTraits<Enum, MAXN>::positivesArr = detail::nameValues<Enum, MAXN>.second;
+template<class Enum, std::size_t MAXN> requires std::is_enum_v<Enum>
+NameValue<Enum> EnumeratorTraits<Enum, MAXN>::zeroNameValue = detail::zeroData<Enum>;
 */
