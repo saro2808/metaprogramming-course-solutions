@@ -272,7 +272,16 @@ struct ZipHelper {
 
 template<Empty E>
 struct ZipHelper<E> : Nil {};
+/*
+template<class... Ts>
+struct ToTypeList : Nil {};
 
+template<class T, class... Ts>
+struct ToTypeList<T, Ts...> {
+    using Head = T;
+    using Tail = ToTypeList<Ts...>;
+};
+*/
 } // namespace detail
 
 template<TypeList... TLs>
