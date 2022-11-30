@@ -60,10 +60,19 @@ struct ToTupleHelper<E, Ts...> {
 	using Value = typename ToTupleHelper<Ts...>::Value;
 };
 
+template<class... Ts>
+struct ToTypeList : Nil {};
+
+template<class T, class... Ts>
+struct ToTypeList<T, Ts...> {
+    using Head = T;
+    using Tail = ToTypeList<Ts...>;
+};
+
 } // namespace detail
 
-template< class... Ts >
-using ToTuple = typename detail::ToTupleHelper<Ts...>::Value;
+template< TypeList TL >
+using ToTuple = typename detail::ToTupleHelper<TL>::Value;
 
 // Repeat
 template<class T>
@@ -133,8 +142,8 @@ template< template<class> class P, TypeSequence TL >
     requires (requires { P<typename TL::Head>::Value; } && !P<typename TL::Head>::Value)
 struct Filter<P, TL> {
 	using Answer = Filter<P, typename TL::Tail>;
-    using Head = Answer::Head;
-    using Tail = Answer::Tail;
+    using Head = typename Answer::Head;
+    using Tail = typename Answer::Tail;
 };
 
 // Iterate
@@ -148,7 +157,7 @@ struct Iterate {
 template< TypeList TL >
 struct Cycle {
 	using Head = typename TL::Head;
-	using Tail = Cycle<FromTuple<ToTuple<typename TL::Tail, Cons<typename TL::Head, Nil>>>>;
+	using Tail = Cycle<FromTuple<ToTuple<detail::ToTypeList<typename TL::Tail, Cons<typename TL::Head, Nil>>>>>;
 };
 
 // Inits
@@ -263,15 +272,6 @@ struct ZipHelper {
 
 template<Empty E>
 struct ZipHelper<E> : Nil {};
-
-template<class... Ts>
-struct ToTypeList : Nil {};
-
-template<class T, class... Ts>
-struct ToTypeList<T, Ts...> {
-    using Head = T;
-    using Tail = ToTypeList<Ts...>;
-};
 
 } // namespace detail
 
