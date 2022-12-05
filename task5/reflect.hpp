@@ -179,7 +179,7 @@ struct GetNth<0, type_lists::TTuple<T, Ts...>> {
 template <class T>
 constexpr auto nonAnnotIndices() {
     std::array<std::size_t, fieldsCount<T>> nonAnnots;
-    nonAnnots.fill(0);
+    nonAnnots.fill(-1);
     std::size_t nonAnnotIdx = 0;
     [&]<std::size_t... I>(std::index_sequence<I...>) {
         ([&]() {
@@ -197,11 +197,17 @@ template <class T>
 constexpr std::size_t countNonAnnotFields() {
     if constexpr (fieldsCount<T> == 0)
         return 0;
-    std::size_t sz = 0;
-    for (int i = 0; i < fieldsCount<T>; ++i)
-        if (typesTupleWithoutAnnots<T>[i] == 0)
-            ++sz;
-    return sz + 1;
+    std::size_t left = 0;
+    std::size_t right = fieldsCount<T> - 1;
+    while (true) {
+        std::size_t middle = (left + right) / 2;
+        if (left == middle)
+            return middle + 1;
+        if (typesTupleWithoutAnnots<T>[middle] == -1)
+            right = middle;
+        else
+            left = middle;
+    }
 }
 
 template <class T, std::size_t I>
@@ -275,6 +281,14 @@ struct FindAnnotation {
         >;
 };
 
+template <class T, std::size_t I, Empty E, template <class...> class AnnotationTemplate>
+struct FindAnnotation<T, I, E, AnnotationTemplate> {
+    using FoundAnnotation = type_lists::Nil;
+};
+
+template <class T, std::size_t I, template <class...> class AnnotationTemplate>
+using FoundAnnotation = typename detail::FindAnnotation<T, I, detail::Annotations<T, I>, AnnotationTemplate>::FoundAnnotation;
+
 }; // namespace detail
 
 template <class T, std::size_t I>
@@ -289,7 +303,8 @@ struct FieldDescriptor {
     static constexpr bool has_annotation_class = detail::HasAnnotClass<T, I, detail::Annotations<T, I>, Annotation>::Value;
 
     template <template <class...> class AnnotationTemplate>
-    using FindAnnotation = typename detail::FindAnnotation<T, I, detail::Annotations<T, I>, AnnotationTemplate>::FoundAnnotation;
+        requires (!type_lists::Empty<detail::FoundAnnotation<T, I, AnnotationTemplate>>)
+    using FindAnnotation = detail::FoundAnnotation<T, I, AnnotationTemplate>;
 };
 
 template <class T>
