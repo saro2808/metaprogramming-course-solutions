@@ -101,6 +101,7 @@ constexpr auto asTupleImpl(std::index_sequence<Is...>) {
 template <class T>
 using TypesTuple = decltype(asTupleImpl<T>(std::make_index_sequence<fieldsCount<T>>{}));
 
+// array-map of non-annotation field indices
 template <class T, std::size_t max, std::size_t offset, std::size_t iterCount>
 constexpr auto fillNonAnnotIndices(auto& nonAnnotsArr, std::size_t start) {
     std::size_t nonAnnotIdx = start;
@@ -129,6 +130,7 @@ constexpr auto nonAnnotIndices() {
 template <class T>
 constexpr auto nonAnnotIndexMap = nonAnnotIndices<T>();
 
+// number of non-annotation fields
 template <class T>
 constexpr std::size_t countNonAnnotFields() {
     if constexpr (fieldsCount<T> == 0)
@@ -152,9 +154,11 @@ using FieldType = typename GetNth<I, TypesTuple<T>>::Type;
 template <class T, std::size_t I>
 using NonAnnotFieldType = typename GetNth<nonAnnotIndexMap<T>[I], TypesTuple<T>>::Type;
 
+// TypeList of annotations of Ith field
 template <class T, std::size_t I>
 using AnnotListAt = ToTypeList<FieldType<T, I>>;
 
+// merge annotation TypeLists of the current field
 template <class T, std::size_t Begin, std::size_t End>
 struct AnnotList : Nil {};
 
