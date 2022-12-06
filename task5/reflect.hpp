@@ -6,88 +6,12 @@
 #include <concepts>
 #include <cstddef>
 #include <tuple>
+#include "type_lists.hpp"
 
-namespace type_lists {
-
-template<class TL>
-concept TypeSequence =
-    requires {
-        typename TL::Head;
-        typename TL::Tail;
-    };
-
-struct Nil {};
-
-template<class... Ts>
-struct TTuple {};
-
-template<class TL>
-concept Empty = std::derived_from<TL, Nil>;
-
-template<class TL>
-concept TypeList = Empty<TL> || TypeSequence<TL>;
-
-// ToTypeList
-template <class... Ts>
-struct ToTypeList : Nil {};
-
-template <class T, class... Ts>
-struct ToTypeList<T, Ts...> {
-    using Head = T;
-    using Tail = ToTypeList<Ts...>;
-};
-
-template <class T, class... Ts>
-struct ToTypeList<TTuple<T, Ts...>> {
-    using Head = T;
-    using Tail = ToTypeList<Ts...>;
-};
-
-template<>
-struct ToTypeList<TTuple<>> : Nil {};
-
-// ToTuple
-template< class... Ts >
-struct ToTupleHelper {
-	using Value = TTuple<Ts...>;
-};
-
-template< TypeSequence TL, class... Ts >
-struct ToTupleHelper<TL, Ts...> {
-	using Value = typename ToTupleHelper<typename TL::Tail, Ts..., typename TL::Head>::Value;
-};
-
-template< Empty E, class... Ts >
-struct ToTupleHelper<E, Ts...> {
-	using Value = typename ToTupleHelper<Ts...>::Value;
-};
-
-template< TypeList TL >
-using ToTuple = typename ToTupleHelper<TL>::Value;
-
-// Append
-template <TypeList L, TypeList R>
-struct Append : Nil {};
-
-template <TypeSequence L, TypeList R>
-struct Append<L, R> {
-    using Head = typename L::Head;
-    using Tail = Append<typename L::Tail, R>;
-};
-
-template <Empty L, TypeSequence R>
-struct Append<L, R> {
-    using Head = typename R::Head;
-    using Tail = typename R::Tail;
-};
-
-} // namespace type_lists
-
-using type_lists::TypeList;
-using type_lists::Empty;
+using namespace type_lists;
 
 template <class... Ts>
-using Annotate = type_lists::TTuple<Ts...>;
+using Annotate = TTuple<Ts...>;
 
 namespace detail {
 
@@ -98,7 +22,6 @@ template <class... Ts>
 constexpr std::size_t isAnnotation<Annotate<Ts...>> = 1;
 
 // fields counter
-
 template <class T, class... Args>
 concept AggregateConstructibleFrom = requires(Args... args) {
     T{ args... };
@@ -110,22 +33,39 @@ struct UbiqConstructor {
     constexpr operator Type&() const noexcept;
 };
 
-template <class T, std::size_t... I>
+template <class T, std::size_t left, std::size_t right, std::size_t... I>
+constexpr auto binarySearchImpl(std::index_sequence<I...>);
+
+template <class T, std::size_t left, std::size_t right, bool binarySearchStarted, std::size_t... I>
 constexpr size_t countFieldsImpl(std::index_sequence<I...>) {
-    return sizeof...(I) - 1;
+    return binarySearchImpl<T, left, right>(std::make_index_sequence<(left+right)/2>{});
 }
 
-template <class T, std::size_t... I>
+template <class T, std::size_t left, std::size_t right, bool binarySearchStarted, std::size_t... I>
     requires AggregateConstructibleFrom<T, UbiqConstructor<I>...>
 constexpr size_t countFieldsImpl(std::index_sequence<I...>) {
-    return countFieldsImpl<T>(std::index_sequence<0, I...>{});
+    if constexpr (binarySearchStarted)
+        return binarySearchImpl<T, left, right>(std::make_index_sequence<(left+right)/2>{});
+    if constexpr (!AggregateConstructibleFrom<T, UbiqConstructor<0>>)
+        return 0;
+    return countFieldsImpl<T, right, 2 * right, false>(std::make_index_sequence<2 * right>{});
+}
+
+template <class T, std::size_t left, std::size_t right, std::size_t... I>
+constexpr auto binarySearchImpl(std::index_sequence<I...>) {
+    constexpr std::size_t mid = (left + right) / 2;
+    if constexpr (mid == left)
+        return mid;
+    if constexpr (AggregateConstructibleFrom<T, UbiqConstructor<I>...>)
+        return countFieldsImpl<T, mid, right, true>(std::make_index_sequence<right>{});
+    else
+        return countFieldsImpl<T, left,  mid, true>(std::make_index_sequence< mid >{});
 }
 
 template <class T>
-constexpr auto fieldsCount = countFieldsImpl<T>(std::index_sequence<>{});
+constexpr auto fieldsCount = countFieldsImpl<T, 0, 1, false>(std::index_sequence<>{});
 
 // type deducer
-
 template <class T, std::size_t N>
 struct Tag {
     friend auto loophole(Tag<T, N>);    
@@ -153,45 +93,41 @@ struct LoopholeGet {
 template <class T, std::size_t... Is>
 constexpr auto asTupleImpl(std::index_sequence<Is...>) {
     constexpr T t{ LoopholeUbiq<T, Is>{}... };
-    return type_lists::TTuple<
+    return TTuple<
         typename LoopholeGet<T, Is>::Type...
     >{};
 }
 
 template <class T>
-using typesTuple = decltype(asTupleImpl<T>(std::make_index_sequence<fieldsCount<T>>{}));
+using TypesTuple = decltype(asTupleImpl<T>(std::make_index_sequence<fieldsCount<T>>{}));
 
-template <int N, typename... Ts>
-struct GetNth {
-    using Type = type_lists::Nil;
-};
-
-template <int N, typename T, typename... Ts>
-struct GetNth<N, type_lists::TTuple<T, Ts...>> {
-    using Type = typename GetNth<N - 1, type_lists::TTuple<Ts...>>::Type;
-};
-
-template <typename T, typename... Ts>
-struct GetNth<0, type_lists::TTuple<T, Ts...>> {
-    using Type = T;
-};
+template <class T, std::size_t max, std::size_t offset, std::size_t iterCount>
+constexpr auto fillNonAnnotIndices(auto& nonAnnotsArr, std::size_t start) {
+    std::size_t nonAnnotIdx = start;
+    [&]<std::size_t... I>(std::index_sequence<I...>) {
+        (void)(([&]() {
+            if constexpr (I+offset < fieldsCount<T>) {
+                if constexpr (!isAnnotation<typename GetNth<I+offset, TypesTuple<T>>::Type>)
+                    nonAnnotsArr[nonAnnotIdx++] = I+offset;
+            }
+        }(), I+offset <= fieldsCount<T>) && ...);
+    }(std::make_index_sequence<max>{});
+    if constexpr (iterCount > 0)
+        fillNonAnnotIndices<T, max, offset + max, iterCount - 1>(nonAnnotsArr, nonAnnotIdx);
+}
 
 template <class T>
 constexpr auto nonAnnotIndices() {
+    constexpr std::size_t clangFoldExprDepth = 256;
+    constexpr std::size_t iterCount = (fieldsCount<T> + clangFoldExprDepth - 1) / clangFoldExprDepth;
     std::array<std::size_t, fieldsCount<T>> nonAnnots;
     nonAnnots.fill(-1);
-    std::size_t nonAnnotIdx = 0;
-    [&]<std::size_t... I>(std::index_sequence<I...>) {
-        ([&]() {
-            if constexpr (!isAnnotation<typename GetNth<I, typesTuple<T>>::Type>)
-                nonAnnots[nonAnnotIdx++] = I;
-        }(), ...);
-    }(std::make_index_sequence<fieldsCount<T>>{});
+    fillNonAnnotIndices<T, clangFoldExprDepth, 0, iterCount>(nonAnnots, 0);
     return nonAnnots;
 }
 
 template <class T>
-constexpr auto typesTupleWithoutAnnots = nonAnnotIndices<T>();
+constexpr auto nonAnnotIndexMap = nonAnnotIndices<T>();
 
 template <class T>
 constexpr std::size_t countNonAnnotFields() {
@@ -203,7 +139,7 @@ constexpr std::size_t countNonAnnotFields() {
         std::size_t middle = (left + right) / 2;
         if (left == middle)
             return middle + 1;
-        if (typesTupleWithoutAnnots<T>[middle] == -1)
+        if (nonAnnotIndexMap<T>[middle] == -1)
             right = middle;
         else
             left = middle;
@@ -211,21 +147,21 @@ constexpr std::size_t countNonAnnotFields() {
 }
 
 template <class T, std::size_t I>
-using FieldType = typename GetNth<I, typesTuple<T>>::Type;
+using FieldType = typename GetNth<I, TypesTuple<T>>::Type;
 
 template <class T, std::size_t I>
-using NonAnnotFieldType = typename GetNth<typesTupleWithoutAnnots<T>[I], typesTuple<T>>::Type;
+using NonAnnotFieldType = typename GetNth<nonAnnotIndexMap<T>[I], TypesTuple<T>>::Type;
 
 template <class T, std::size_t I>
-using AnnotListAt = type_lists::ToTypeList<FieldType<T, I>>;
+using AnnotListAt = ToTypeList<FieldType<T, I>>;
 
 template <class T, std::size_t Begin, std::size_t End>
-struct AnnotList : type_lists::Nil {};
+struct AnnotList : Nil {};
 
 template <class T, std::size_t Begin, std::size_t End>
     requires (Begin < End)
 struct AnnotList<T, Begin, End> {
-    using Value = type_lists::Append<
+    using Value = Append<
         AnnotListAt<T, Begin>,
         AnnotList<T, Begin + 1, End>
     >;
@@ -236,8 +172,8 @@ struct AnnotList<T, Begin, End> {
 template <class T, std::size_t I>
 using Annotations = AnnotList
                       < T
-                      , I == 0 ? 0 : typesTupleWithoutAnnots<T>[I-1] + 1
-                      , typesTupleWithoutAnnots<T>[I]
+                      , I == 0 ? 0 : nonAnnotIndexMap<T>[I-1] + 1
+                      , nonAnnotIndexMap<T>[I]
                       >;
 
 template <class T, std::size_t I, TypeList Annotations, class Annotation>
@@ -283,7 +219,7 @@ struct FindAnnotation {
 
 template <class T, std::size_t I, Empty E, template <class...> class AnnotationTemplate>
 struct FindAnnotation<T, I, E, AnnotationTemplate> {
-    using FoundAnnotation = type_lists::Nil;
+    using FoundAnnotation = Nil;
 };
 
 template <class T, std::size_t I, template <class...> class AnnotationTemplate>
@@ -294,7 +230,7 @@ using FoundAnnotation = typename detail::FindAnnotation<T, I, detail::Annotation
 template <class T, std::size_t I>
 struct FieldDescriptor {
     using Type = detail::NonAnnotFieldType<T, I>;
-    using Annotations = type_lists::ToTuple<detail::Annotations<T, I>>;
+    using Annotations = ToTuple<detail::Annotations<T, I>>;
 
     template <template <class...> class AnnotationTemplate>
     static constexpr bool has_annotation_template = detail::HasAnnotTemplate<T, I, detail::Annotations<T, I>, AnnotationTemplate>::Value;
@@ -303,7 +239,7 @@ struct FieldDescriptor {
     static constexpr bool has_annotation_class = detail::HasAnnotClass<T, I, detail::Annotations<T, I>, Annotation>::Value;
 
     template <template <class...> class AnnotationTemplate>
-        requires (!type_lists::Empty<detail::FoundAnnotation<T, I, AnnotationTemplate>>)
+        requires (!Empty<detail::FoundAnnotation<T, I, AnnotationTemplate>>)
     using FindAnnotation = detail::FoundAnnotation<T, I, AnnotationTemplate>;
 };
 
