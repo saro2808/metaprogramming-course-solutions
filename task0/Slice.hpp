@@ -232,8 +232,6 @@ public:
     return true;
   }
   
-  bool operator!=(const Slice& rhs) const { return !(*this == rhs); }
-  
   template<class newT, std::size_t newExtent, std::ptrdiff_t newStride>
     requires (std::is_same_v<newT, T> || std::is_same_v<newT, const T>)
   operator Slice<newT, newExtent, newStride>() const {
