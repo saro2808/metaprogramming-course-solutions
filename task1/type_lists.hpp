@@ -160,47 +160,35 @@ struct Cycle {
 	using Tail = Cycle<FromTuple<ToTuple<detail::ToTypeList<typename TL::Tail, Cons<typename TL::Head, Nil>>>>>;
 };
 
-// Inits
+template< template<class, class> class OP, class T, TypeList TL >
+struct Scanl;
+
+// Inits, Tails
+namespace detail {
+
+template< class, class >
+struct AppendHelper {
+    using Value = TTuple<>;
+};
+
+template< class T, class... Ts >
+struct AppendHelper<TTuple<Ts...>, T> {
+    using Value = TTuple<Ts..., T>;
+};
+
+template< class L, class R >
+using Append = typename AppendHelper<L, R>::Value;
+
+template< TypeList L, class >
+using Cut = std::conditional_t<Empty<L>, Cons<Nil, Nil>, typename L::Tail>;
+
+} // namespace detail
+
 template< TypeList TL >
-struct InitsHelper : Nil {};
-
-template< TypeSequence TL >
-struct InitsHelper<TL> {
-	
-	template<TypeList L>
-	struct AppendHead : Nil {};
-
-	template<TypeSequence L>
-	struct AppendHead<L> {
-		using Head = typename TL::Head;
-		using Tail = L;
-	};
-	
-	using Head = Cons<typename TL::Head, Nil>;
-	using Tail = Map<AppendHead, InitsHelper<typename TL::Tail>>;
-};
+using Inits = Map<FromTuple, Scanl<detail::Append, TTuple<>, TL>>;
 
 template< TypeList TL >
-struct Inits {
-	using Head = Nil;
-	using Tail = InitsHelper<TL>;
-};
-
-// Tails
-template< TypeList TL >
-struct Tails : Nil {};
-
-template< TypeSequence TL >
-struct Tails<TL> {
-    using Head = TL;
-    using Tail = Tails<typename TL::Tail>;
-};
-
-template< Empty E >
-struct Tails<E> {
-	using Head = E;
-	using Tail = Nil;
-};
+using Tails = Scanl<detail::Cut, TL, TL>;
 
 // Scanl
 template< template<class, class> class OP, class T, TypeList TL >
