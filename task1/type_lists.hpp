@@ -266,22 +266,13 @@ using Tail = typename TL::Tail;
 // TLL stands for TypeLists' list
 template<TypeList TLL>
 struct ZipHelper {
-    using Head = TTuple<Map<Head, TLL>>;
+    using Head = ToTuple<Map<Head, TLL>>;
     using Tail = ZipHelper<Map<Tail, TLL>>;
 };
 
 template<Empty E>
 struct ZipHelper<E> : Nil {};
-/*
-template<class... Ts>
-struct ToTypeList : Nil {};
 
-template<class T, class... Ts>
-struct ToTypeList<T, Ts...> {
-    using Head = T;
-    using Tail = ToTypeList<Ts...>;
-};
-*/
 } // namespace detail
 
 template<TypeList... TLs>
