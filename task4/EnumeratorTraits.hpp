@@ -12,10 +12,6 @@ using NameValue = std::pair<std::string_view, Enum>;
 
 namespace detail {
 
-static constexpr std::size_t min(std::size_t a, std::size_t b) noexcept {
-    return a < b ? a : b;
-}
-
 template <class Enum, Enum V>
 static constexpr std::string_view nameOf() noexcept {
     constexpr const std::string_view name(__PRETTY_FUNCTION__);
@@ -33,12 +29,12 @@ static constexpr std::string_view nameOf() noexcept {
 
 template <class Enum, std::size_t MAXN>
 static constexpr std::size_t highLimit() noexcept {
-    return min( static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::max()), MAXN);
+    return std::min( static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::max()), MAXN);
 }
 
 template <class Enum, std::size_t MAXN>
 static constexpr std::size_t lowLimit() noexcept {
-    return min(-static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::min()), MAXN);
+    return std::min(-static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::min()), MAXN);
 }
 
 template<class Enum, std::size_t MAXN>
@@ -57,75 +53,44 @@ static constexpr auto fill(auto& arr, std::size_t start) noexcept {
             if (arr[i].first == std::string_view("")) {
                 arr[i].second = static_cast<Enum>(MAXN + 1); // invalid enumerator
             } else {
-                arr[i++].second = currentValue;
+                arr[i].second = currentValue;
+                i += sign;
             }
         }(), ...);
     }(std::make_index_sequence<max>{});
-    return i - start;
+    return sign * (i - start);
 }
 
 template<class Enum, std::size_t MAXN>
-static constexpr auto nameValueArr() noexcept {
+static constexpr auto describeEnum() noexcept {
     constexpr auto  low =  lowV<Enum, MAXN>;
     constexpr auto high = highV<Enum, MAXN>;
 
+    std::array<NameValue<Enum>, high + low + 1> nameValueArr;
+    
     constexpr auto zeroValue = static_cast<Enum>(0);
-    constexpr auto zeroNameValue = nameOf<Enum, zeroValue>();
-        
-    std::array<NameValue<Enum>, high + 1> positiveArr;
-    std::array<NameValue<Enum>,  low + 1> negativeArr;
-        
-    auto smallNegativesSize = fill<Enum, MAXN, -1, 0,  low/2>(negativeArr, 1);
-    auto smallPositivesSize = fill<Enum, MAXN,  1, 0, high/2>(positiveArr, 1);
-    auto NegativesSize = smallNegativesSize + fill<Enum, MAXN, -1,  low/2,  low -  low/2>(negativeArr, 1 + smallNegativesSize);
-    auto PositivesSize = smallPositivesSize + fill<Enum, MAXN,  1, high/2, high - high/2>(positiveArr, 1 + smallPositivesSize);
+    constexpr auto zeroName = nameOf<Enum, zeroValue>();
+    constexpr std::size_t zeroIsValid = (zeroName == "") ? 0 : 1;
+    if constexpr (zeroIsValid) {
+        nameValueArr[low].first = zeroName;
+        nameValueArr[low].second = zeroValue;
+    }
+    auto smallNegativesSize = fill<Enum, MAXN, -1, 0,  low/2>(nameValueArr, low - 1);
+    auto smallPositivesSize = fill<Enum, MAXN,  1, 0, high/2>(nameValueArr, low + zeroIsValid);
+    auto negativesSize = smallNegativesSize + fill<Enum, MAXN, -1,  low/2,  low -  low/2>(nameValueArr, low - 1 - smallNegativesSize);
+    auto positivesSize = smallPositivesSize + fill<Enum, MAXN,  1, high/2, high - high/2>(nameValueArr, low + zeroIsValid + smallPositivesSize) + zeroIsValid;
         
     return std::make_pair(
-            std::make_pair(NegativesSize, PositivesSize),
-            std::make_pair(negativeArr, positiveArr)
+            std::make_pair(low - negativesSize, negativesSize + positivesSize),
+            nameValueArr
     );
 }
 
-template<class Enum>
-inline constexpr auto zeroData = std::make_pair(nameOf<Enum, static_cast<Enum>(0)>(), static_cast<Enum>(0));
-
-template<class Enum>
-inline constexpr std::size_t zeroIsValid = (zeroData<Enum>.first == "" ? 0 : 1);
+template<class Enum, std::size_t MAXN>
+inline constexpr auto enumData = describeEnum<Enum, MAXN>();
 
 template<class Enum, std::size_t MAXN>
-inline constexpr auto enumData = nameValueArr<Enum, MAXN>();
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto sizes = enumData<Enum, MAXN>.first;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto negativesSize = sizes<Enum, MAXN>.first;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto positivesSize = sizes<Enum, MAXN>.second;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto size = negativesSize<Enum, MAXN> + positivesSize<Enum, MAXN> + zeroIsValid<Enum>;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto nameValues = enumData<Enum, MAXN>.second;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto negativesArr = nameValues<Enum, MAXN>.first;
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto positivesArr = nameValues<Enum, MAXN>.second;
-
-template<class Enum, std::size_t MAXN>
-static constexpr NameValue<Enum> nameValueAt(const std::size_t i) noexcept {
-    if constexpr (zeroIsValid<Enum>) {
-        if (i == negativesSize<Enum, MAXN>)
-            return zeroData<Enum>;
-    }
-    if (i < negativesSize<Enum, MAXN>)
-        return negativesArr<Enum, MAXN>[negativesSize<Enum, MAXN> - i];
-    return positivesArr<Enum, MAXN>[i - negativesSize<Enum, MAXN> - zeroIsValid<Enum> + 1];
-}
+inline constexpr auto zeroIdx = enumData<Enum, MAXN>.first.first;
 
 } // namespace detail
 
@@ -133,15 +98,15 @@ template <class Enum, std::size_t MAXN = 512>
 	requires std::is_enum_v<Enum>
 struct EnumeratorTraits {
     static constexpr std::size_t size() noexcept {
-        return detail::size<Enum, MAXN>;
+        return detail::enumData<Enum, MAXN>.first.second;
     }
 
     static constexpr Enum at(const std::size_t i) noexcept {
-        return detail::nameValueAt<Enum, MAXN>(i).second;
+        return detail::enumData<Enum, MAXN>.second[detail::zeroIdx<Enum, MAXN> + i].second;
     }
 
     static constexpr std::string_view nameAt(const std::size_t i) noexcept {
-        return detail::nameValueAt<Enum, MAXN>(i).first;
+        return detail::enumData<Enum, MAXN>.second[detail::zeroIdx<Enum, MAXN> + i].first;
     }
 };
 
