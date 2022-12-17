@@ -9,24 +9,24 @@ concept Implies = !A || (A && B); // A -> B
 
 constexpr std::size_t SMALL_BUFFER_SIZE = 64;
 
-template<typename Alloc>
 class AbstractLogger {
 public:
+  virtual ~AbstractLogger() {}
   virtual void operator()(unsigned int) = 0;
 };
 
-template <std::invocable<unsigned int> Logger, typename Allocator>
-class LoggerWrapper : public AbstractLogger<Allocator> {
+template <std::invocable<unsigned int> Logger>
+class LoggerWrapper : public AbstractLogger {
 public:
   template<class LW = LoggerWrapper> 
   LoggerWrapper(LW&& other)
     requires std::is_same_v<std::remove_reference_t<LW>, std::remove_reference_t<LoggerWrapper>>
-    : logger_{other.logger_}, allocator_{other.allocator_} {}
+    : logger_{other.logger_} {}
 
   template <class L = Logger>
     requires std::is_same_v<std::remove_reference_t<L>, std::remove_reference_t<Logger>>
-  LoggerWrapper(L&& logger, const Allocator& allocator = Allocator())
-    : logger_{std::forward<L>(logger)}, allocator_{allocator} {}
+  LoggerWrapper(L&& logger)
+    : logger_{std::forward<L>(logger)} {}
 
   void operator()(unsigned int arg) override {
     logger_(arg);
@@ -34,7 +34,6 @@ public:
 
 private:
   Logger logger_;
-  Allocator allocator_;
 };
 
 // Log-related data
@@ -195,7 +194,7 @@ public:
     requires (Implies<std::copyable<T>, std::copy_constructible<Logger>> &&
               Implies<std::movable<T> , std::move_constructible<Logger>>)
   void setLogger(Logger&& logger) {
-    using LW = LoggerWrapper<Logger, Allocator>;
+    using LW = LoggerWrapper<Logger>;
     clearLogger();
     if constexpr (sizeof(LW) <= SMALL_BUFFER_SIZE) {
       AllocTraits::construct(allocator_, reinterpret_cast<LW*>(logger_.staticLogger.data()), std::forward<Logger>(logger));
