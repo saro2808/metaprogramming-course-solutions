@@ -103,7 +103,7 @@ public:
 
   Spy(const Spy& other)
     requires std::copyable<T>
-    : value_(other.value_) {
+    : value_{other.value_} {
 
     if (other.copy_)
       other.copy_(logger_, other.logger_, other.allocator_);
@@ -112,14 +112,14 @@ public:
     copy_ = other.copy_;
     move_ = other.move_;
 
-    if constexpr (requires { AllocTraits::propagate_on_container_copy_assignment; })
-      if constexpr (AllocTraits::propagate_on_container_copy_assignment)
-        allocator_ = other.allocator_;
+    //if constexpr (requires { AllocTraits::propagate_on_container_copy_assignment; })
+    //  if constexpr (AllocTraits::propagate_on_container_copy_assignment)
+    //    allocator_ = other.allocator_;
   }
   
   Spy(Spy&& other) noexcept
     requires std::move_constructible<T>
-    : value_(std::move(other.value_)) {
+    : value_{std::move(other.value_)} {
     
     if (other.move_)
       other.move_(logger_, other.logger_, other.allocator_);
