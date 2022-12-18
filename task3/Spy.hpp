@@ -123,17 +123,16 @@ public:
     
     if (other.move_)
       other.move_(logger_, other.logger_, other.allocator_);
-    call_ = std::move(other.call_);
-    destructor_ = std::move(other.destructor_);
-    copy_ = std::move(other.copy_);
-    move_ = std::move(other.move_);
+    call_ = std::exchange(other.call_, nullptr);
+    destructor_ = std::exchange(other.destructor_, nullptr);
+    copy_ = std::exchange(other.copy_, nullptr);
+    move_ = std::exchange(other.move_, nullptr);
 
     allocator_ = other.allocator_;
   }
 
   Spy& operator=(const Spy& other)
     requires std::copyable<T> {
-    
     if (this != &other) {
       clearLogger();
    
@@ -155,14 +154,14 @@ public:
   
   Spy& operator=(Spy&& other)
     requires std::movable<T> {
-    
     if (this != &other) {
       clearLogger();
       
       call_ = std::exchange(other.call_, nullptr);
       copy_ = std::exchange(other.copy_, nullptr);
       move_ = std::exchange(other.move_, nullptr);
-   
+      destructor_ = other.destructor_;
+
       if constexpr (!std::is_same_v<typename AllocTraits::propagate_on_container_move_assignment, std::true_type>) {
         if (allocator_ != other.allocator_ && copy_) {
           copy_(logger_, other.logger_, allocator_);
@@ -171,8 +170,8 @@ public:
         }
       } else if (move_) {
           move_(logger_, other.logger_, other.allocator_);
+          other.destructor_ = nullptr;
       }
-      destructor_ = std::exchange(other.destructor_, nullptr);
     
       value_ = std::move(other.value_);
       logInfo_ = other.logInfo_.exchangeWithNull();
