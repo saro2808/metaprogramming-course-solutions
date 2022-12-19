@@ -60,18 +60,12 @@ using ToTuple = typename ToTupleHelper<TL>::Value;
 
 // Append
 template <TypeList L, TypeList R>
-struct Append : Nil {};
+struct Append : R {};
 
 template <TypeSequence L, TypeList R>
 struct Append<L, R> {
     using Head = typename L::Head;
     using Tail = Append<typename L::Tail, R>;
-};
-
-template <Empty L, TypeSequence R>
-struct Append<L, R> {
-    using Head = typename R::Head;
-    using Tail = typename R::Tail;
 };
 
 // GetNth
