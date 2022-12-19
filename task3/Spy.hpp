@@ -5,36 +5,9 @@
 #include <array>
 
 template <bool A, bool B>
-concept Implies = !A || (A && B); // A -> B
+concept Implies = !A || B; // A -> B
 
 constexpr std::size_t SMALL_BUFFER_SIZE = 64;
-
-class AbstractLogger {
-public:
-  virtual ~AbstractLogger() {}
-  virtual void operator()(unsigned int) = 0;
-};
-
-template <std::invocable<unsigned int> Logger>
-class LoggerWrapper : public AbstractLogger {
-public:
-  template<class LW = LoggerWrapper> 
-  LoggerWrapper(LW&& other)
-    requires std::is_same_v<std::remove_reference_t<LW>, std::remove_reference_t<LoggerWrapper>>
-    : logger_{other.logger_} {}
-
-  template <class L = Logger>
-    requires std::is_same_v<std::remove_reference_t<L>, std::remove_reference_t<Logger>>
-  LoggerWrapper(L&& logger)
-    : logger_{std::forward<L>(logger)} {}
-
-  void operator()(unsigned int arg) override {
-    logger_(arg);
-  }
-
-private:
-  Logger logger_;
-};
 
 // Log-related data
 struct LogInfo {
@@ -111,10 +84,6 @@ public:
     destructor_ = other.destructor_;
     copy_ = other.copy_;
     move_ = other.move_;
-
-    //if constexpr (requires { AllocTraits::propagate_on_container_copy_assignment; })
-    //  if constexpr (AllocTraits::propagate_on_container_copy_assignment)
-    //    allocator_ = other.allocator_;
   }
   
   Spy(Spy&& other) noexcept
@@ -136,15 +105,16 @@ public:
     if (this != &other) {
       clearLogger();
    
-      call_ = other.call_; 
       destructor_ = other.destructor_;
+      call_ = other.call_; 
       copy_ = other.copy_;
-      if (copy_)
-        copy_(logger_, other.logger_, other.allocator_);
+      move_ = other.move_;
     
-      if constexpr (requires { AllocTraits::propagate_on_container_copy_assignment; })
-        if constexpr (AllocTraits::propagate_on_container_copy_assignment)
-          allocator_ = other.allocator_;
+      if constexpr (std::is_same_v<typename AllocTraits::propagate_on_container_copy_assignment, std::true_type>)
+        allocator_ = other.allocator_;
+      
+      if (copy_)
+        copy_(logger_, other.logger_, allocator_);
       
       value_ = other.value_;
       logInfo_.null();
@@ -167,6 +137,9 @@ public:
           copy_(logger_, other.logger_, allocator_);
           allocator_ = other.allocator_;
           other.clearLogger();
+        } else if (move_) {
+          move_(logger_, other.logger_, other.allocator_);
+          other.destructor_ = nullptr;
         }
       } else if (move_) {
           move_(logger_, other.logger_, other.allocator_);
@@ -180,8 +153,7 @@ public:
   }
 
   ~Spy() noexcept(std::is_nothrow_destructible_v<T>) {
-    if (logger_.dynamicLogger)
-      clearLogger();
+    clearLogger();
   }
 
   constexpr bool operator==(const Spy& other) const
@@ -193,18 +165,18 @@ public:
     requires (Implies<std::copyable<T>, std::copy_constructible<Logger>> &&
               Implies<std::movable<T> , std::move_constructible<Logger>>)
   void setLogger(Logger&& logger) {
-    using LW = LoggerWrapper<Logger>;
+    using LoggerNoRef = std::remove_reference_t<Logger>;
     clearLogger();
-    if constexpr (sizeof(LW) <= SMALL_BUFFER_SIZE) {
-      AllocTraits::construct(allocator_, reinterpret_cast<LW*>(logger_.staticLogger.data()), std::forward<Logger>(logger));
+    if constexpr (sizeof(Logger) <= SMALL_BUFFER_SIZE) {
+      AllocTraits::construct(allocator_, std::launder(reinterpret_cast<LoggerNoRef*>(logger_.staticLogger.data())), std::forward<Logger>(logger));
     } else {
-      logger_.dynamicLogger = allocator_.allocate(sizeof(LW));
-      AllocTraits::construct(allocator_, reinterpret_cast<LW*>(logger_.dynamicLogger), std::forward<Logger>(logger));
+      logger_.dynamicLogger = allocator_.allocate(sizeof(Logger));
+      AllocTraits::construct(allocator_, reinterpret_cast<LoggerNoRef*>(logger_.dynamicLogger), std::forward<Logger>(logger));
     }
-    call_ = &call<LW>;
-    destructor_ = &destroy<LW>;
-    copy_ = &copy<LW>;
-    move_ = &move<LW>;
+    call_ = &call<LoggerNoRef>;
+    copy_ = &copy<LoggerNoRef>;
+    move_ = &move<LoggerNoRef>;
+    destructor_ = &destroy<LoggerNoRef>;
   }
 
 private:
@@ -248,7 +220,7 @@ private:
   template<class L>
   static void move(LoggerType& to, LoggerType& from, Allocator allocator) {
     if constexpr (sizeof(L) < SMALL_BUFFER_SIZE) {
-      auto* logger = std::launder(const_cast<L*>(reinterpret_cast<const L*>(from.staticLogger.data())));
+      auto* logger = const_cast<L*>(reinterpret_cast<const L*>(from.staticLogger.data()));
       AllocTraits::construct(allocator, std::launder(reinterpret_cast<L*>(to.staticLogger.data())), std::move(*logger));
       AllocTraits::destroy(allocator, logger);
     } else {
