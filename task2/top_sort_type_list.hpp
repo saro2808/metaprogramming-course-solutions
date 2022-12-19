@@ -44,15 +44,7 @@ struct WithoutMinimal {
 };
 
 template< TypeSequence TL >
-	requires (!Empty<typename TL::Tail>)
-struct WithoutMinimal<TL, 0> {
-	using Head = typename TL::Tail::Head;
-	using Tail = typename TL::Tail::Tail;
-};
-
-template< TypeSequence TL >
-	requires Empty<typename TL::Tail>
-struct WithoutMinimal<TL, 0> : Nil {};
+struct WithoutMinimal<TL, 0> : TL::Tail {};
 
 template< TypeList TL >
 struct TopSort {
