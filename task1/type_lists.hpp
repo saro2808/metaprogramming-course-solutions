@@ -136,12 +136,8 @@ struct Filter<P, TL> {
 };
 
 template< template<class> class P, TypeSequence TL >
-    requires (requires { P<typename TL::Head>::Value; } && !P<typename TL::Head>::Value)
-struct Filter<P, TL> {
-	using Answer = Filter<P, typename TL::Tail>;
-    using Head = typename Answer::Head;
-    using Tail = typename Answer::Tail;
-};
+    requires (!P<typename TL::Head>::Value)
+struct Filter<P, TL> : Filter<P, typename TL::Tail> {};
 
 // Iterate
 template< template<class> class F, class T >
