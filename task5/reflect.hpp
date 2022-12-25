@@ -16,10 +16,10 @@ using Annotate = TTuple<Ts...>;
 namespace detail {
 
 template <class T>
-constexpr bool isAnnotation = 0;
+constexpr bool isAnnotation = false;
 
 template <class... Ts>
-constexpr bool isAnnotation<Annotate<Ts...>> = 1;
+constexpr bool isAnnotation<Annotate<Ts...>> = true;
 
 // fields counter
 template <class T, class... Args>
