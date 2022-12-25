@@ -37,12 +37,6 @@ static constexpr std::size_t lowLimit() noexcept {
     return std::min(-static_cast<std::size_t>(std::numeric_limits<std::underlying_type_t<Enum>>::min()), MAXN);
 }
 
-template<class Enum, std::size_t MAXN>
-inline constexpr auto highV = highLimit<Enum, MAXN>();
-
-template<class Enum, std::size_t MAXN>
-inline constexpr auto  lowV =  lowLimit<Enum, MAXN>();
-
 template<class Enum, std::size_t MAXN, char sign, int offset, std::size_t max>
 static constexpr auto fill(auto& arr, std::size_t start) noexcept {
     std::size_t i = start;
@@ -63,8 +57,8 @@ static constexpr auto fill(auto& arr, std::size_t start) noexcept {
 
 template<class Enum, std::size_t MAXN>
 static constexpr auto describeEnum() noexcept {
-    constexpr auto  low =  lowV<Enum, MAXN>;
-    constexpr auto high = highV<Enum, MAXN>;
+    constexpr auto  low =  lowLimit<Enum, MAXN>();
+    constexpr auto high = highLimit<Enum, MAXN>();
 
     std::array<NameValue<Enum>, high + low + 1> nameValueArr;
     
