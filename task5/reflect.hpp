@@ -164,21 +164,12 @@ struct AnnotList : Nil {};
 
 template <class T, std::size_t Begin, std::size_t End>
     requires (Begin < End)
-struct AnnotList<T, Begin, End> {
-    using Value = Append<
-        AnnotListAt<T, Begin>,
-        AnnotList<T, Begin + 1, End>
-    >;
-    using Head = typename Value::Head;
-    using Tail = typename Value::Tail;
-};
+struct AnnotList<T, Begin, End> : Append<AnnotListAt<T, Begin>, AnnotList<T, Begin + 1, End>> {};
 
 template <class T, std::size_t I>
-using Annotations = AnnotList
-                      < T
-                      , I == 0 ? 0 : nonAnnotIndexMap<T>[I-1] + 1
-                      , nonAnnotIndexMap<T>[I]
-                      >;
+using Annotations = AnnotList< T
+                             , I == 0 ? 0 : nonAnnotIndexMap<T>[I-1] + 1
+                             , nonAnnotIndexMap<T>[I] >;
 
 template <class T, std::size_t I, TypeList Annotations, class Annotation>
 struct HasAnnotClass {
