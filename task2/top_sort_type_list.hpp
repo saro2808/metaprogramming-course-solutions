@@ -26,33 +26,25 @@ struct Minimal {
 	using Prev = Minimal<typename TL::Tail>;
 	constexpr static bool isLess = std::is_base_of_v<typename Prev::Value::Class, typename TL::Head::Class>;
 	using Value = std::conditional_t<isLess, typename TL::Head, typename Prev::Value>;
-	constexpr static size_t Index = isLess ? 0 : Prev::Index + 1;
+	constexpr static std::size_t Index = isLess ? 0 : Prev::Index + 1;
 };
 
 template< TypeSequence TL >
 	requires Empty<typename TL::Tail>
 struct Minimal<TL> {
 	using Value = typename TL::Head;
-	constexpr static size_t Index = 0;
+	constexpr static std::size_t Index = 0;
 };
 
 
-template< TypeSequence TL, size_t IndexOfMinimum >
+template< TypeSequence TL, std::size_t IndexOfMinimum >
 struct WithoutMinimal {
-	using Head = TL::Head;
+	using Head = typename TL::Head;
 	using Tail = WithoutMinimal<typename TL::Tail, IndexOfMinimum - 1>;
 };
 
 template< TypeSequence TL >
-	requires (!Empty<typename TL::Tail>)
-struct WithoutMinimal<TL, 0> {
-	using Head = typename TL::Tail::Head;
-	using Tail = typename TL::Tail::Tail;
-};
-
-template< TypeSequence TL >
-	requires Empty<typename TL::Tail>
-struct WithoutMinimal<TL, 0> : Nil {};
+struct WithoutMinimal<TL, 0> : TL::Tail {};
 
 template< TypeList TL >
 struct TopSort {
