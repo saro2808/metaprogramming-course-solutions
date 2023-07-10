@@ -60,10 +60,19 @@ struct ToTupleHelper<E, Ts...> {
 	using Value = typename ToTupleHelper<Ts...>::Value;
 };
 
+template<class... Ts>
+struct ToTypeList : Nil {};
+
+template<class T, class... Ts>
+struct ToTypeList<T, Ts...> {
+    using Head = T;
+    using Tail = ToTypeList<Ts...>;
+};
+
 } // namespace detail
 
-template< class... Ts >
-using ToTuple = typename detail::ToTupleHelper<Ts...>::Value;
+template< TypeList TL >
+using ToTuple = typename detail::ToTupleHelper<TL>::Value;
 
 // Repeat
 template<class T>
@@ -92,10 +101,7 @@ template< int N, TypeList TL >
 struct Drop<N, TL> : Drop<N - 1, typename TL::Tail> {};
 
 template< TypeSequence TL >
-struct Drop<0, TL> {
-    using Head = typename TL::Head;
-    using Tail = typename TL::Tail;
-};
+struct Drop<0, TL> : TL {};
 
 // Replicate
 template< int N, class T >
@@ -130,12 +136,8 @@ struct Filter<P, TL> {
 };
 
 template< template<class> class P, TypeSequence TL >
-    requires (requires { P<typename TL::Head>::Value; } && !P<typename TL::Head>::Value)
-struct Filter<P, TL> {
-	using Answer = Filter<P, typename TL::Tail>;
-    using Head = Answer::Head;
-    using Tail = Answer::Tail;
-};
+    requires (!P<typename TL::Head>::Value)
+struct Filter<P, TL> : Filter<P, typename TL::Tail> {};
 
 // Iterate
 template< template<class> class F, class T >
@@ -148,50 +150,38 @@ struct Iterate {
 template< TypeList TL >
 struct Cycle {
 	using Head = typename TL::Head;
-	using Tail = Cycle<FromTuple<ToTuple<typename TL::Tail, Cons<typename TL::Head, Nil>>>>;
+	using Tail = Cycle<FromTuple<ToTuple<detail::ToTypeList<typename TL::Tail, Cons<typename TL::Head, Nil>>>>>;
 };
 
-// Inits
+template< template<class, class> class OP, class T, TypeList TL >
+struct Scanl;
+
+// Inits, Tails
+namespace detail {
+
+template< class, class >
+struct AppendHelper {
+    using Value = TTuple<>;
+};
+
+template< class T, class... Ts >
+struct AppendHelper<TTuple<Ts...>, T> {
+    using Value = TTuple<Ts..., T>;
+};
+
+template< class L, class R >
+using Append = typename AppendHelper<L, R>::Value;
+
+template< TypeList L, class >
+using Cut = std::conditional_t<Empty<L>, Cons<Nil, Nil>, typename L::Tail>;
+
+} // namespace detail
+
 template< TypeList TL >
-struct InitsHelper : Nil {};
-
-template< TypeSequence TL >
-struct InitsHelper<TL> {
-	
-	template<TypeList L>
-	struct AppendHead : Nil {};
-
-	template<TypeSequence L>
-	struct AppendHead<L> {
-		using Head = typename TL::Head;
-		using Tail = L;
-	};
-	
-	using Head = Cons<typename TL::Head, Nil>;
-	using Tail = Map<AppendHead, InitsHelper<typename TL::Tail>>;
-};
+using Inits = Map<FromTuple, Scanl<detail::Append, TTuple<>, TL>>;
 
 template< TypeList TL >
-struct Inits {
-	using Head = Nil;
-	using Tail = InitsHelper<TL>;
-};
-
-// Tails
-template< TypeList TL >
-struct Tails : Nil {};
-
-template< TypeSequence TL >
-struct Tails<TL> {
-    using Head = TL;
-    using Tail = Tails<typename TL::Tail>;
-};
-
-template< Empty E >
-struct Tails<E> {
-	using Head = E;
-	using Tail = Nil;
-};
+using Tails = Scanl<detail::Cut, TL, TL>;
 
 // Scanl
 template< template<class, class> class OP, class T, TypeList TL >
@@ -223,7 +213,7 @@ struct FoldlHelper {
 template< template<class, class> class OP, class T, TypeList TL >
     requires (Empty<TL> || Empty<typename TL::Tail>)
 struct FoldlHelper<OP, T, TL> {
-	using Value = T;
+	  using Value = T;
 };
 
 } // namesace detail
@@ -231,52 +221,19 @@ struct FoldlHelper<OP, T, TL> {
 template< template<class, class> class OP, class T, TypeList TL >
 using Foldl = typename detail::FoldlHelper<OP, T, TL>::Value;
 
+// Zip
+template< class... TLs >
+struct Zip : Nil {};
+
+template< TypeSequence... TLs >
+struct Zip<TLs...> {
+  using Head = TTuple<typename TLs::Head...>;
+  using Tail = Zip<typename TLs::Tail...>;
+};
+
 // Zip2
 template< TypeList L, TypeList R >
-struct Zip2;
-
-template< TypeList L, TypeList R >
-struct Zip2 {
-    using Head = TTuple<typename L::Head, typename R::Head>;
-    using Tail = Zip2<typename L::Tail, typename R::Tail>;
-};
-
-template< TypeList L, TypeList R >
-    requires (Empty<L> || Empty<R>)
-struct Zip2<L, R> : Nil {};
-
-// Zip
-namespace detail {
-
-template<TypeSequence TL>
-using Head = typename TL::Head;
-
-template<TypeSequence TL>
-using Tail = typename TL::Tail;
-
-// TLL stands for TypeLists' list
-template<TypeList TLL>
-struct ZipHelper {
-    using Head = TTuple<Map<Head, TLL>>;
-    using Tail = ZipHelper<Map<Tail, TLL>>;
-};
-
-template<Empty E>
-struct ZipHelper<E> : Nil {};
-
-template<class... Ts>
-struct ToTypeList : Nil {};
-
-template<class T, class... Ts>
-struct ToTypeList<T, Ts...> {
-    using Head = T;
-    using Tail = ToTypeList<Ts...>;
-};
-
-} // namespace detail
-
-template<TypeList... TLs>
-using Zip = detail::ZipHelper<detail::ToTypeList<TLs...>>;
+using Zip2 = Zip<L, R>;
 
 // GroupBy
 template< template<class, class> class EQ, TypeList TL >
