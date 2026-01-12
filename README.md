@@ -2,10 +2,6 @@
 
 # Metaprogramming Course Solutions
 ## Moscow Institute of Physics and Technology, autumn 2022
-
-</div>
-<div align="right">
-
 ### 🛠️ Built With
 [![C++20](https://img.shields.io/badge/C++-20-%2300599C.svg?style=for-the-badge&logo=c%2B%2B&logoColor=white)](https://isocpp.org/)
 <!-- [![CMake](https://img.shields.io/badge/CMake-%23064F8C.svg?style=for-the-badge&logo=cmake&logoColor=white)](https://cmake.org/) -->
